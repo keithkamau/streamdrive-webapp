@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "./context/AuthContext";
 import { usePWA } from "./hooks/usePWA";
 import AuthLayout from "./components/auth/AuthLayout";
@@ -10,6 +10,20 @@ import EstateMap from "./pages/admin/EstateMap";
 import Residents from "./pages/admin/Residents";
 import Settings from "./pages/admin/Settings";
 import { Spinner } from "./components/ui";
+
+const VALID_PAGES = [
+  "dashboard",
+  "announcements",
+  "admin-payments",
+  "map",
+  "residents",
+  "settings",
+];
+
+function getPageFromHash() {
+  const hash = window.location.hash.replace("#", "").trim();
+  return VALID_PAGES.includes(hash) ? hash : "dashboard";
+}
 
 // ── Install banner ────────────────────────────────────────────────────────────
 function InstallBanner({ onInstall, onDismiss }) {
@@ -126,23 +140,33 @@ function renderPage(currentPage) {
 export default function App() {
   const { user, loading } = useAuth();
   const { installPrompt, isOnline, promptInstall } = usePWA();
-  const [currentPage, setCurrentPage] = useState("dashboard");
+  const [currentPage, setCurrentPage] = useState(getPageFromHash);
   const [bannerDismissed, setBannerDismissed] = useState(false);
+
+  // Sync state when browser back/forward is used
+  useEffect(() => {
+    const handleHashChange = () => {
+      setCurrentPage(getPageFromHash());
+    };
+    window.addEventListener("hashchange", handleHashChange);
+    return () => window.removeEventListener("hashchange", handleHashChange);
+  }, []);
+
+  // Navigate — updates both state and URL hash
+  const navigate = (page) => {
+    window.location.hash = page;
+    setCurrentPage(page);
+  };
 
   if (loading) return <LoadingScreen />;
   if (!user) return <AuthLayout />;
 
   return (
     <>
-      {/* Offline indicator */}
       {!isOnline && <OfflineBanner />}
-
-      {/* Main app */}
-      <AppShell currentPage={currentPage} onNavigate={setCurrentPage}>
+      <AppShell currentPage={currentPage} onNavigate={navigate}>
         {renderPage(currentPage)}
       </AppShell>
-
-      {/* PWA install prompt */}
       {installPrompt && !bannerDismissed && (
         <InstallBanner
           onInstall={promptInstall}
