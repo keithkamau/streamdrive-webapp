@@ -6,7 +6,6 @@ import AppShell from "./components/layout/AppShell";
 import Dashboard from "./pages/resident/Dashboard";
 import Announcements from "./pages/resident/Announcements";
 import AllPayments from "./pages/admin/AllPayments";
-import EstateMap from "./pages/admin/EstateMap";
 import Residents from "./pages/admin/Residents";
 import Settings from "./pages/admin/Settings";
 import { Spinner } from "./components/ui";
@@ -121,8 +120,6 @@ function renderPage(currentPage) {
       return <Announcements />;
     case "admin-payments":
       return <AllPayments />;
-    case "map":
-      return <EstateMap />;
     case "residents":
       return <Residents />;
     case "settings":
