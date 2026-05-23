@@ -16,12 +16,12 @@ export function Button({
     primary:
       "bg-green-600 hover:bg-green-500 active:bg-green-700 text-white focus:ring-green-500",
     secondary:
-      "bg-white/10 hover:bg-white/20 text-white border border-white/20 focus:ring-white/30",
+      "bg-zinc-100 hover:bg-zinc-200 active:bg-zinc-300 text-zinc-900 border border-zinc-300 focus:ring-zinc-400",
     ghost:
-      "bg-transparent hover:bg-white/8 text-green-400 hover:text-green-300 focus:ring-green-500",
+      "bg-transparent hover:bg-zinc-100 text-zinc-700 hover:text-zinc-900 focus:ring-zinc-400",
     danger: "bg-red-600 hover:bg-red-500 text-white focus:ring-red-500",
     outline:
-      "bg-transparent border border-green-600 text-green-400 hover:bg-green-600 hover:text-white focus:ring-green-500",
+      "bg-transparent border border-green-600 text-green-600 hover:bg-green-600 hover:text-white focus:ring-green-500",
   };
 
   const sizes = {
@@ -262,10 +262,10 @@ export function Card({ children, className = "", ...props }) {
 // ── Alert ─────────────────────────────────────────────────────────────────────
 export function Alert({ children, variant = "info", className = "" }) {
   const variants = {
-    info: "bg-blue-50 border-blue-200 text-blue-700",
-    success: "bg-green-50 border-green-200 text-green-700",
-    warning: "bg-yellow-50 border-yellow-200 text-yellow-700",
-    danger: "bg-red-50 border-red-200 text-red-700",
+    info: "bg-blue-50 border border-blue-200 text-blue-700",
+    success: "bg-green-50 border border-green-200 text-green-700",
+    warning: "bg-yellow-50 border border-yellow-200 text-yellow-700",
+    danger: "bg-red-50 border border-red-200 text-red-700",
   };
   const icons = {
     info: (
