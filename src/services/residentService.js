@@ -1,8 +1,9 @@
 import { supabase } from "../lib/supabase";
+import { seedMonthlyPayments } from "./paymentService";
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+const CURRENT_YEAR = 2025;
+const CURRENT_MONTH = "June";
 
-// Map Supabase snake_case row to camelCase app model
 function mapResident(row) {
   return {
     id: row.id,
@@ -17,7 +18,6 @@ function mapResident(row) {
   };
 }
 
-// Map camelCase app model to Supabase snake_case
 function mapToRow(fields) {
   const row = {};
   if (fields.name !== undefined) row.name = fields.name;
@@ -31,8 +31,6 @@ function mapToRow(fields) {
     row.months_overdue = fields.monthsOverdue;
   return row;
 }
-
-// ── API ───────────────────────────────────────────────────────────────────────
 
 export async function getResidents() {
   const { data, error } = await supabase
@@ -63,7 +61,21 @@ export async function addResident(fields) {
     .single();
 
   if (error) throw error;
-  return mapResident(data);
+
+  const newResident = mapResident(data);
+
+  // Auto-seed a pending payment for the current month
+  try {
+    await seedMonthlyPayments([newResident], CURRENT_MONTH, CURRENT_YEAR);
+  } catch (err) {
+    // Non-fatal — log but don't block the resident creation
+    console.warn(
+      "[ResidentService] Failed to seed payment for new resident:",
+      err,
+    );
+  }
+
+  return newResident;
 }
 
 export async function updateResident(id, fields) {
@@ -90,4 +102,11 @@ export async function updatePaymentStatus(
   monthsOverdue = 0,
 ) {
   return updateResident(id, { paymentStatus, monthsOverdue });
+}
+
+// ── Seed all residents for a new month ────────────────────────────────────────
+// Call this at the start of each month from Settings or a cron job
+export async function seedNewMonth(month, year) {
+  const residents = await getResidents();
+  await seedMonthlyPayments(residents, month, year);
 }

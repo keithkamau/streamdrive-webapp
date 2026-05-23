@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Card, Button, Input, Alert, Badge } from "../../components/ui";
 import { getSettings, updateSettings } from "../../services/settingsService";
 import { ADMIN_HOUSES, HOUSE_NUMBERS } from "../../data/estateConfig";
+import { seedNewMonth } from "../../services/residentService";
 
 const TABS = ["General", "Levy", "Admins", "Notifications"];
 
@@ -19,6 +20,10 @@ export default function Settings() {
   const [emailReminders, setEmailReminders] = useState(true);
   const [reminderDays, setReminderDays] = useState(7);
   const [overdueReminders, setOverdueReminders] = useState(true);
+  const [seedMonth, setSeedMonth] = useState("June");
+  const [seedYear, setSeedYear] = useState(2025);
+  const [seeding, setSeeding] = useState(false);
+  const [seedSuccess, setSeedSuccess] = useState("");
 
   useEffect(() => {
     getSettings()
@@ -50,6 +55,21 @@ export default function Settings() {
       setError("Failed to save settings. Please try again.");
     }
     setSaving(false);
+  };
+
+  const handleSeedMonth = async () => {
+    setSeeding(true);
+    setSeedSuccess("");
+    try {
+      await seedNewMonth(seedMonth, seedYear);
+      setSeedSuccess(
+        `Pending payment records seeded for ${seedMonth} ${seedYear}.`,
+      );
+      setTimeout(() => setSeedSuccess(""), 4000);
+    } catch {
+      setError("Failed to seed payments. Please try again.");
+    }
+    setSeeding(false);
   };
 
   if (pageLoading) {
@@ -234,6 +254,65 @@ export default function Settings() {
                 .
               </p>
             </div>
+          </div>
+          {/* Seed new month */}
+          <div className='flex flex-col gap-3 pt-2 border-t border-zinc-100'>
+            <div>
+              <p className='text-xs font-semibold uppercase tracking-widest text-zinc-500 mb-1'>
+                New Month Setup
+              </p>
+              <p className='text-xs text-zinc-400'>
+                At the start of each month, seed pending payment records for all
+                current residents. Safe to run multiple times — existing records
+                are not overwritten.
+              </p>
+            </div>
+            <div className='flex items-center gap-3 flex-wrap'>
+              <select
+                value={seedMonth}
+                onChange={(e) => setSeedMonth(e.target.value)}
+                className='bg-zinc-50 border border-zinc-200 rounded-lg px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent'
+              >
+                {[
+                  "January",
+                  "February",
+                  "March",
+                  "April",
+                  "May",
+                  "June",
+                  "July",
+                  "August",
+                  "September",
+                  "October",
+                  "November",
+                  "December",
+                ].map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={seedYear}
+                onChange={(e) => setSeedYear(Number(e.target.value))}
+                className='bg-zinc-50 border border-zinc-200 rounded-lg px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent'
+              >
+                {[2025, 2026, 2027].map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </select>
+              <Button
+                variant='outline'
+                size='md'
+                loading={seeding}
+                onClick={handleSeedMonth}
+              >
+                Seed Payments
+              </Button>
+            </div>
+            {seedSuccess && <Alert variant='success'>{seedSuccess}</Alert>}
           </div>
           <div className='pt-2 border-t border-zinc-100 flex justify-end'>
             <Button

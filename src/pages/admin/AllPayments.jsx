@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Badge, Card, Button } from "../../components/ui";
 import {
   getResidents,
@@ -14,6 +14,7 @@ import {
   notifyOverdue,
 } from "../../services/notifications";
 import { useAuth } from "../../context/AuthContext";
+import { useRealtime } from "../../hooks/useRealtime";
 
 const LEVY_AMOUNT = 3000;
 const CURRENT_YEAR = 2026;
@@ -306,6 +307,15 @@ export default function AllPayments() {
   useEffect(() => {
     reload().finally(() => setPageLoading(false));
   }, []);
+  // Real-time listeners — reload when any other admin updates payments or residents
+  useRealtime(
+    "payments",
+    useCallback(() => reload(), []),
+  );
+  useRealtime(
+    "residents",
+    useCallback(() => reload(), []),
+  );
 
   // ── Cell click — cycle status ─────────────────────────────────────────────
   const handleCellClick = (resident, month, currentStatus) => {

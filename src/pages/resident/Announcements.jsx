@@ -7,6 +7,8 @@ import {
   addComment,
   deleteAnnouncement,
 } from "../../services/announcementService";
+import { useRealtime } from "../../hooks/useRealtime";
+import { useCallback } from "react";
 
 function timeAgo(dateStr) {
   const diff = Math.floor((new Date() - new Date(dateStr)) / 1000);
@@ -217,6 +219,14 @@ export default function Announcements() {
       mounted = false;
     };
   }, []);
+  useRealtime(
+    "announcements",
+    useCallback(() => reload(), []),
+  );
+  useRealtime(
+    "comments",
+    useCallback(() => reload(), []),
+  );
 
   const handleAddComment = async (announcementId, text) => {
     try {

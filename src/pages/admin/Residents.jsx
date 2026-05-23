@@ -7,6 +7,8 @@ import {
   deleteResident,
 } from "../../services/residentService";
 import { notifyPaymentReminder } from "../../services/notifications";
+import { useRealtime } from "../../hooks/useRealtime";
+import { useCallback } from "react";
 
 const CURRENT_MONTH = "June 2025";
 const LEVY_AMOUNT = 3000;
@@ -474,6 +476,10 @@ export default function Residents() {
   useEffect(() => {
     reload().finally(() => setPageLoading(false));
   }, []);
+  useRealtime(
+    "residents",
+    useCallback(() => reload(), []),
+  );
 
   // ── CRUD ──────────────────────────────────────────────────────────────────
   const handleAdd = async (form) => {
