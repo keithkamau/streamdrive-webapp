@@ -9,6 +9,7 @@ import AllPayments from "./pages/admin/AllPayments";
 import Residents from "./pages/admin/Residents";
 import Settings from "./pages/admin/Settings";
 import { Spinner } from "./components/ui";
+import Profile from "./pages/admin/Profile";
 
 const VALID_PAGES = [
   "dashboard",
@@ -17,6 +18,7 @@ const VALID_PAGES = [
   "map",
   "residents",
   "settings",
+  "profile",
 ];
 
 function getPageFromHash() {
@@ -124,6 +126,8 @@ function renderPage(currentPage) {
       return <Residents />;
     case "settings":
       return <Settings />;
+    case "profile":
+      return <Profile />;
     default:
       return (
         <div className='flex items-center justify-center h-full text-zinc-400 text-sm'>

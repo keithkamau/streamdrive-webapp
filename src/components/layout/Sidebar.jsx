@@ -171,8 +171,19 @@ export default function Sidebar({
       </nav>
 
       {/* User card */}
+      {/* User card */}
       <div className='px-3 py-4 border-t border-zinc-200'>
-        <div className='flex items-center gap-3 px-3 py-2.5 rounded-lg bg-zinc-50 border border-zinc-200'>
+        <button
+          onClick={() => {
+            onNavigate("profile");
+            onClose?.();
+          }}
+          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-all duration-150 text-left ${
+            currentPage === "profile"
+              ? "border-green-300 bg-green-50"
+              : "border-zinc-200 bg-zinc-50 hover:border-zinc-300 hover:bg-zinc-100"
+          }`}
+        >
           <div className='w-8 h-8 rounded-full bg-green-100 flex items-center justify-center shrink-0'>
             <span className='text-xs font-bold text-green-700'>
               {user?.firstName?.[0]}
@@ -188,11 +199,11 @@ export default function Sidebar({
             </p>
           </div>
           {user?.isAdmin && (
-            <span className='text-[10px] font-bold uppercase tracking-wide text-green-600 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded'>
+            <span className='text-[10px] font-bold uppercase tracking-wide text-green-600 bg-green-50 border border-green-200 px-1.5 py-0.5 rounded shrink-0'>
               Admin
             </span>
           )}
-        </div>
+        </button>
       </div>
     </div>
   );
