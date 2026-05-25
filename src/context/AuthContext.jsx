@@ -9,8 +9,6 @@ import { supabase } from "../lib/supabase";
 import { getResidentByEmail } from "../services/residentService";
 import { isAdminHouse } from "../services/settingsService";
 
-// ─── Context ──────────────────────────────────────────────────────────────────
-
 const AuthContext = createContext(null);
 
 export function useAuth() {
@@ -19,114 +17,106 @@ export function useAuth() {
   return ctx;
 }
 
-// ─── Provider ─────────────────────────────────────────────────────────────────
-
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null); // Supabase auth user
-  const [admin, setAdmin] = useState(null); // residents row for this admin
+  // `user` is a merged object: resident profile fields + auth email + id.
+  // All pages destructure from `user` directly (name, houseNumber, isAdmin,
+  // firstName, lastName, email, phone) — no separate `admin` object needed.
+  const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // ── Resolve admin profile from a Supabase session ────────────────────────
-  // 1. Look up the user's email in the residents table.
-  // 2. Check their house_number against the admin_houses DB table.
-  // 3. If either check fails, sign them out immediately.
+  // Build the merged user object that all existing pages expect.
+  // Splits `name` into firstName / lastName for Announcements / Profile.
+  function buildUser(authUser, resident) {
+    const nameParts = (resident.name ?? "").trim().split(/\s+/);
+    const firstName = nameParts[0] ?? "";
+    const lastName  = nameParts.slice(1).join(" ") || firstName;
+
+    return {
+      // Resident profile fields
+      id:           resident.id,
+      name:         resident.name,
+      firstName,
+      lastName,
+      email:        resident.email ?? authUser.email,
+      phone:        resident.phone ?? "",
+      houseNumber:  resident.houseNumber,
+      isAdmin:      true,                    // only admins can log in
+      paymentStatus: resident.paymentStatus,
+      monthsOverdue: resident.monthsOverdue,
+      joinedAt:     resident.joinedAt,
+
+      // Keep raw Supabase auth id accessible as authId for supabase.auth calls
+      authId: authUser.id,
+    };
+  }
 
   const resolveAdmin = useCallback(async (authUser) => {
-    if (!authUser) {
-      setUser(null);
-      setAdmin(null);
-      return;
-    }
+    if (!authUser) { setUser(null); return; }
 
     try {
       const resident = await getResidentByEmail(authUser.email);
 
       if (!resident) {
-        // Email not in residents table — not allowed
         await supabase.auth.signOut();
         setUser(null);
-        setAdmin(null);
         return;
       }
 
-      // Check admin_houses table (DB-driven, not hardcoded)
       const adminStatus = await isAdminHouse(resident.houseNumber);
-
       if (!adminStatus) {
-        // Resident exists but their house isn't an admin house
         await supabase.auth.signOut();
         setUser(null);
-        setAdmin(null);
         return;
       }
 
-      setUser(authUser);
-      setAdmin(resident);
+      setUser(buildUser(authUser, resident));
     } catch (err) {
-      console.error("AuthContext: error resolving admin profile", err);
+      console.error("AuthContext: resolveAdmin failed", err);
       await supabase.auth.signOut();
       setUser(null);
-      setAdmin(null);
     }
   }, []);
 
-  // ── Bootstrap: check existing session on mount ───────────────────────────
+  // Re-fetch the resident row and rebuild user — called by Profile after edits.
+  const refreshUser = useCallback(async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) await resolveAdmin(session.user);
+  }, [resolveAdmin]);
 
   useEffect(() => {
     let mounted = true;
 
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!mounted) return;
-      if (session?.user) {
-        await resolveAdmin(session.user);
-      }
+      if (session?.user) await resolveAdmin(session.user);
       setLoading(false);
     });
 
-    // Listen for sign-in / sign-out / token-refresh events
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!mounted) return;
-
-      if (event === "SIGNED_OUT") {
-        setUser(null);
-        setAdmin(null);
-        return;
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (!mounted) return;
+        if (event === "SIGNED_OUT")       { setUser(null); return; }
+        if (event === "PASSWORD_RECOVERY") return;
+        if (session?.user) await resolveAdmin(session.user);
       }
+    );
 
-      // PASSWORD_RECOVERY — don't redirect, let ResetPasswordPage handle it
-      if (event === "PASSWORD_RECOVERY") return;
-
-      if (session?.user) {
-        await resolveAdmin(session.user);
-      }
-    });
-
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-    };
+    return () => { mounted = false; subscription.unsubscribe(); };
   }, [resolveAdmin]);
-
-  // ── Sign out ──────────────────────────────────────────────────────────────
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
     setUser(null);
-    setAdmin(null);
   }, []);
 
-  // ── Context value ─────────────────────────────────────────────────────────
-
   const value = {
-    user, // Supabase auth user object
-    admin, // residents row (camelCase) for the logged-in admin
+    user,           // merged resident + auth object; null when logged out
     loading,
     signOut,
-    // Convenience: resolved display name
-    displayName: admin?.name ?? user?.email ?? "",
-    houseNumber: admin?.houseNumber ?? "",
+    refreshUser,    // Profile.jsx calls this after saving details
+    // Legacy convenience aliases used by TopBar / Sidebar
+    displayName: user?.name ?? user?.email ?? "",
+    houseNumber: user?.houseNumber ?? "",
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

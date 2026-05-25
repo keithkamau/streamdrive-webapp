@@ -24,7 +24,9 @@ export function ThemeProvider({ children }) {
   const toggleTheme = () => setDark((d) => !d);
 
   return (
-    <ThemeContext.Provider value={{ dark, toggleTheme }}>
+    // Expose both `dark` and `isDark` so TopBar.jsx (isDark) and any other
+    // consumer using `dark` both work without changes.
+    <ThemeContext.Provider value={{ dark, isDark: dark, toggleTheme }}>
       {children}
     </ThemeContext.Provider>
   );
@@ -32,6 +34,6 @@ export function ThemeProvider({ children }) {
 
 export const useTheme = () => {
   const ctx = useContext(ThemeContext);
-  if (!ctx) throw new Error("useTheme must be used within ThemeProvider");
+  if (!ctx) throw new Error("useTheme must be within ThemeProvider");
   return ctx;
 };
