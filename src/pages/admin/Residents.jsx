@@ -16,7 +16,7 @@ import { getHouses } from "../../services/houseService";
 import {
   sendPaymentReminder,
   sendOverdueNotice,
-} from "../../services/notifications";
+} from "../../services/notificationService";
 import { useRealtime } from "../../hooks/useRealtime";
 import {
   Button,
