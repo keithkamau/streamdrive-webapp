@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Badge, Card, Button, Input, Alert } from "../../components/ui";
 import {
   getResidents,
@@ -6,9 +6,9 @@ import {
   updateResident,
   deleteResident,
 } from "../../services/residentService";
+import { getHouses } from "../../services/houseService";
 import { notifyPaymentReminder } from "../../services/notifications";
 import { useRealtime } from "../../hooks/useRealtime";
-import { useCallback } from "react";
 
 const CURRENT_MONTH = "June 2025";
 const LEVY_AMOUNT = 3000;
@@ -33,7 +33,13 @@ function timeAgo(dateStr) {
 }
 
 // ── Resident form ─────────────────────────────────────────────────────────────
-function ResidentForm({ initial, onSave, onCancel, loading }) {
+function ResidentForm({
+  initial,
+  onSave,
+  onCancel,
+  loading,
+  availableHouses = [],
+}) {
   const [form, setForm] = useState(
     initial
       ? {
@@ -56,7 +62,8 @@ function ResidentForm({ initial, onSave, onCancel, loading }) {
     if (!form.name.trim()) e.name = "Full name is required.";
     if (!form.email.includes("@")) e.email = "Enter a valid email address.";
     if (!form.phone.trim()) e.phone = "Phone number is required.";
-    if (!form.houseNumber.trim()) e.houseNumber = "House number is required.";
+    if (!form.houseNumber.trim())
+      e.houseNumber = "Please select a house number.";
     return e;
   };
 
@@ -72,6 +79,7 @@ function ResidentForm({ initial, onSave, onCancel, loading }) {
 
   return (
     <form onSubmit={handleSubmit} className='flex flex-col gap-4'>
+      {/* Info note */}
       <div className='flex gap-2.5 items-start bg-green-50 border border-green-200 rounded-lg p-3.5'>
         <svg
           className='w-4 h-4 text-green-500 shrink-0 mt-0.5'
@@ -91,6 +99,7 @@ function ResidentForm({ initial, onSave, onCancel, loading }) {
         </p>
       </div>
 
+      {/* Name */}
       <Input
         label='Full Name'
         placeholder='e.g. Jane Doe'
@@ -98,6 +107,8 @@ function ResidentForm({ initial, onSave, onCancel, loading }) {
         onChange={set("name")}
         error={errors.name}
       />
+
+      {/* Email & Phone */}
       <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
         <Input
           label='Email Address'
@@ -117,15 +128,38 @@ function ResidentForm({ initial, onSave, onCancel, loading }) {
           error={errors.phone}
         />
       </div>
-      <Input
-        label='House Number'
-        placeholder='e.g. SD-01 or SD-11A'
-        value={form.houseNumber}
-        onChange={set("houseNumber")}
-        error={errors.houseNumber}
-        hint='Must match a valid Stream Drive house number'
-      />
 
+      {/* House number dropdown */}
+      <div className='flex flex-col gap-1.5'>
+        <label className='text-xs font-semibold uppercase tracking-widest text-zinc-500'>
+          House Number
+        </label>
+        <select
+          value={form.houseNumber}
+          onChange={(e) => {
+            setForm((f) => ({ ...f, houseNumber: e.target.value }));
+            setErrors((er) => ({ ...er, houseNumber: "" }));
+          }}
+          className='w-full bg-zinc-50 border border-zinc-200 rounded-lg px-3.5 py-2.5 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all cursor-pointer'
+        >
+          <option value='' disabled>
+            Select a house number
+          </option>
+          {availableHouses.map((h) => (
+            <option key={h.id} value={h.houseNumber}>
+              {h.houseNumber}
+            </option>
+          ))}
+        </select>
+        {errors.houseNumber && (
+          <p className='text-xs text-red-400'>{errors.houseNumber}</p>
+        )}
+        <p className='text-xs text-zinc-400'>
+          House numbers are managed under Admin → Houses
+        </p>
+      </div>
+
+      {/* Record preview */}
       {form.name && form.houseNumber && (
         <div className='bg-zinc-50 border border-zinc-200 rounded-xl p-3.5'>
           <p className='text-xs font-semibold uppercase tracking-widest text-zinc-400 mb-2'>
@@ -148,6 +182,7 @@ function ResidentForm({ initial, onSave, onCancel, loading }) {
         </div>
       )}
 
+      {/* Actions */}
       <div className='flex justify-end gap-2 pt-2 border-t border-zinc-100'>
         <Button
           type='button'
@@ -201,6 +236,7 @@ function ResidentDrawer({
     <div className='fixed inset-0 z-50 flex justify-end'>
       <div className='fixed inset-0 bg-black/30' onClick={onClose} />
       <div className='relative z-10 w-full max-w-sm bg-white h-full shadow-2xl flex flex-col overflow-y-auto'>
+        {/* Header */}
         <div className='flex items-center justify-between px-6 py-5 border-b border-zinc-100'>
           <h3 className='font-display font-bold text-zinc-900 text-base'>
             Resident Details
@@ -222,6 +258,7 @@ function ResidentDrawer({
           </button>
         </div>
 
+        {/* Profile */}
         <div className='px-6 py-6 flex flex-col items-center gap-3 border-b border-zinc-100'>
           <div className='w-16 h-16 rounded-2xl bg-green-100 flex items-center justify-center'>
             <span className='font-display font-bold text-green-700 text-xl'>
@@ -246,6 +283,7 @@ function ResidentDrawer({
           </div>
         </div>
 
+        {/* Contact */}
         <div className='px-6 py-5 flex flex-col gap-3 border-b border-zinc-100'>
           <h4 className='text-xs font-semibold uppercase tracking-widest text-zinc-400'>
             Contact Information
@@ -300,6 +338,7 @@ function ResidentDrawer({
           </div>
         </div>
 
+        {/* Payment status */}
         <div className='px-6 py-5 flex flex-col gap-3 border-b border-zinc-100'>
           <h4 className='text-xs font-semibold uppercase tracking-widest text-zinc-400'>
             Payment Status
@@ -312,7 +351,9 @@ function ResidentDrawer({
             <div className='flex justify-between items-center'>
               <span className='text-sm text-zinc-600'>Months overdue</span>
               <span
-                className={`text-sm font-bold ${resident.monthsOverdue > 0 ? "text-red-500" : "text-green-600"}`}
+                className={`text-sm font-bold ${
+                  resident.monthsOverdue > 0 ? "text-red-500" : "text-green-600"
+                }`}
               >
                 {resident.monthsOverdue}
               </span>
@@ -320,7 +361,9 @@ function ResidentDrawer({
             <div className='flex justify-between items-center'>
               <span className='text-sm text-zinc-600'>Amount owed</span>
               <span
-                className={`text-sm font-bold ${resident.monthsOverdue > 0 ? "text-red-500" : "text-zinc-400"}`}
+                className={`text-sm font-bold ${
+                  resident.monthsOverdue > 0 ? "text-red-500" : "text-zinc-400"
+                }`}
               >
                 {resident.monthsOverdue > 0
                   ? `KES ${(resident.monthsOverdue * LEVY_AMOUNT).toLocaleString()}`
@@ -336,6 +379,7 @@ function ResidentDrawer({
           )}
         </div>
 
+        {/* Notifications */}
         <div className='px-6 py-5 flex flex-col gap-3 border-b border-zinc-100'>
           <h4 className='text-xs font-semibold uppercase tracking-widest text-zinc-400'>
             Notifications
@@ -366,6 +410,7 @@ function ResidentDrawer({
           </Button>
         </div>
 
+        {/* Actions */}
         <div className='px-6 py-5 flex flex-col gap-2 mt-auto'>
           <Button
             variant='secondary'
@@ -446,6 +491,7 @@ function Modal({ title, children, onClose }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function Residents() {
   const [residents, setResidents] = useState([]);
+  const [availableHouses, setAvailableHouses] = useState([]);
   const [pageLoading, setPageLoading] = useState(true);
   const [pageError, setPageError] = useState("");
   const [search, setSearch] = useState("");
@@ -462,23 +508,33 @@ export default function Residents() {
     setTimeout(() => setToast(""), 3500);
   };
 
-  // ── Load residents from Supabase ──────────────────────────────────────────
-  const reload = async () => {
+  // ── Load data ─────────────────────────────────────────────────────────────
+  const reload = useCallback(async () => {
     try {
-      const data = await getResidents();
-      setResidents(data);
+      const [residentData, houseData] = await Promise.all([
+        getResidents(),
+        getHouses(),
+      ]);
+      setResidents(residentData);
+      setAvailableHouses(houseData);
     } catch (err) {
       setPageError("Failed to load residents. Please refresh.");
       console.error(err);
     }
-  };
+  }, []);
 
   useEffect(() => {
     reload().finally(() => setPageLoading(false));
-  }, []);
+  }, [reload]);
+
+  // Real-time updates
   useRealtime(
     "residents",
-    useCallback(() => reload(), []),
+    useCallback(() => reload(), [reload]),
+  );
+  useRealtime(
+    "houses",
+    useCallback(() => reload(), [reload]),
   );
 
   // ── CRUD ──────────────────────────────────────────────────────────────────
@@ -582,6 +638,7 @@ export default function Residents() {
 
   return (
     <div className='max-w-5xl mx-auto flex flex-col gap-6 animate-fade-in'>
+      {/* Header */}
       <div className='flex items-center justify-between gap-4'>
         <div>
           <h2 className='font-display font-bold text-zinc-900 text-xl'>
@@ -608,12 +665,14 @@ export default function Residents() {
 
       {pageError && <Alert variant='danger'>{pageError}</Alert>}
 
+      {/* Toast */}
       {toast && (
         <div className='fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-zinc-900 text-white text-sm font-medium px-5 py-3 rounded-xl shadow-xl animate-fade-in'>
           {toast}
         </div>
       )}
 
+      {/* Summary */}
       <div className='grid grid-cols-2 lg:grid-cols-4 gap-4'>
         {[
           {
@@ -653,6 +712,7 @@ export default function Residents() {
         ))}
       </div>
 
+      {/* Search & filter */}
       <div className='flex items-center gap-3 flex-wrap'>
         <div className='relative flex-1 min-w-50'>
           <svg
@@ -689,6 +749,7 @@ export default function Residents() {
         </div>
       </div>
 
+      {/* Residents grid */}
       <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4'>
         {filtered.length === 0 ? (
           <div className='col-span-full flex flex-col items-center justify-center py-16 gap-3 text-center'>
@@ -754,6 +815,7 @@ export default function Residents() {
                   </div>
                   <Badge variant={cfg.variant}>{cfg.label}</Badge>
                 </div>
+
                 <div className='flex flex-col gap-1.5'>
                   <div className='flex items-center gap-2 text-xs text-zinc-500'>
                     <svg
@@ -781,6 +843,7 @@ export default function Residents() {
                     <span>{resident.phone}</span>
                   </div>
                 </div>
+
                 <div className='flex items-center justify-between pt-2 border-t border-zinc-100'>
                   <span className='text-xs text-zinc-400'>
                     Added {timeAgo(resident.joinedAt)}
@@ -800,16 +863,19 @@ export default function Residents() {
         )}
       </div>
 
+      {/* Add modal */}
       {showAddModal && (
         <Modal title='Add New Resident' onClose={() => setShowAddModal(false)}>
           <ResidentForm
             onSave={handleAdd}
             onCancel={() => setShowAddModal(false)}
             loading={formLoading}
+            availableHouses={availableHouses}
           />
         </Modal>
       )}
 
+      {/* Edit modal */}
       {editingResident && (
         <Modal title='Edit Resident' onClose={() => setEditingResident(null)}>
           <ResidentForm
@@ -817,10 +883,12 @@ export default function Residents() {
             onSave={handleEdit}
             onCancel={() => setEditingResident(null)}
             loading={formLoading}
+            availableHouses={availableHouses}
           />
         </Modal>
       )}
 
+      {/* Delete confirm */}
       {deleteConfirm && (
         <Modal title='Remove Resident' onClose={() => setDeleteConfirm(null)}>
           <div className='flex flex-col gap-4'>
@@ -851,6 +919,7 @@ export default function Residents() {
         </Modal>
       )}
 
+      {/* Drawer */}
       {selectedResident && (
         <ResidentDrawer
           resident={selectedResident}

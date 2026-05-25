@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
 import { Card, Button, Input, Alert, Badge } from "../../components/ui";
 import { getSettings, updateSettings } from "../../services/settingsService";
-import { ADMIN_HOUSES, HOUSE_NUMBERS } from "../../data/estateConfig";
-import { seedNewMonth } from "../../services/residentService";
+import { ADMIN_HOUSES } from "../../data/estateConfig";import { seedNewMonth } from "../../services/residentService";
 
 const TABS = ["General", "Levy", "Admins", "Notifications"];
 

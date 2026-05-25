@@ -10,6 +10,7 @@ import Residents from "./pages/admin/Residents";
 import Settings from "./pages/admin/Settings";
 import { Spinner } from "./components/ui";
 import Profile from "./pages/admin/Profile";
+import Houses from "./pages/admin/Houses";
 
 const VALID_PAGES = [
   "dashboard",
@@ -124,6 +125,8 @@ function renderPage(currentPage) {
       return <AllPayments />;
     case "residents":
       return <Residents />;
+    case "houses":
+      return <Houses />;
     case "settings":
       return <Settings />;
     case "profile":
