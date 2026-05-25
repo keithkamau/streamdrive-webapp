@@ -7,7 +7,7 @@ import {
   isHouseOccupied,
 } from "../../services/houseService";
 import { useRealtime } from "../../hooks/useRealtime";
-import { ADMIN_HOUSES } from "../../data/estateConfig";
+import { isAdminHouse } from "../../data/estateConfig";
 
 export default function Houses() {
   const [houses, setHouses] = useState([]);
@@ -96,7 +96,7 @@ export default function Houses() {
 
   const occupied = houses.filter((h) =>
     /* We don't track occupation here but admins can see admin houses */
-    ADMIN_HOUSES.includes(h.houseNumber),
+    isAdminHouse(h.houseNumber),
   ).length;
 
   if (loading) {
@@ -276,7 +276,7 @@ export default function Houses() {
         ) : (
           <div className='divide-y divide-zinc-100'>
             {filtered.map((house) => {
-              const isAdmin = ADMIN_HOUSES.includes(house.houseNumber);
+              const isAdmin = isAdminHouse(house.houseNumber);
               return (
                 <div
                   key={house.id}
@@ -351,7 +351,7 @@ export default function Houses() {
                 {deleteConfirm.houseNumber}
               </span>{" "}
               from the estate? This cannot be undone.
-              {ADMIN_HOUSES.includes(deleteConfirm.houseNumber) && (
+              {isAdminHouse(deleteConfirm.houseNumber) && (
                 <span className='block mt-2 text-yellow-700 bg-yellow-50 border border-yellow-200 rounded-lg p-2.5 text-xs'>
                   Warning — this is an admin house. Removing it will not revoke
                   admin access until the admin list in estateConfig.js is also

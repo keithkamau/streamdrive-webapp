@@ -17,7 +17,7 @@ import {
   sendPaymentConfirmation,
   sendOverdueNotice,
   sendPaymentReminder,
-} from "../../services/notificationService";
+} from "../../services/notifications";
 import {
   exportPaymentsCSV,
   exportPaymentsPDF,

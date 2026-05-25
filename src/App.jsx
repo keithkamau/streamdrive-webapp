@@ -16,7 +16,6 @@ const VALID_PAGES = [
   "dashboard",
   "announcements",
   "admin-payments",
-  "map",
   "residents",
   "settings",
   "profile",
