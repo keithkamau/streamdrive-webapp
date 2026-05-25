@@ -1,3 +1,4 @@
+// pages/admin/AllPayments.jsx
 import { useState, useEffect, useCallback } from "react";
 import {
   getCurrentMonth,
@@ -11,12 +12,17 @@ import {
   getPaymentsForMonth,
   upsertPayment,
 } from "../../services/paymentService";
-import { getResidents } from "../../services/residentService";
-import { updateResident } from "../../services/residentService";
+import { getResidents, updateResident } from "../../services/residentService";
 import {
   sendPaymentConfirmation,
   sendOverdueNotice,
+  sendPaymentReminder,
 } from "../../services/notifications";
+import {
+  exportPaymentsCSV,
+  exportPaymentsPDF,
+} from "../../services/exportService";
+import { getSettings } from "../../services/settingsService";
 import { useRealtime } from "../../hooks/useRealtime";
 import { Button, Badge, Card, Spinner, Alert } from "../../components/ui/index";
 
@@ -24,7 +30,7 @@ import { Button, Badge, Card, Spinner, Alert } from "../../components/ui/index";
 
 const STATUS_CYCLE = { pending: "paid", paid: "overdue", overdue: "pending" };
 
-const STATUS_LABELS = {
+const STATUS_META = {
   paid: { label: "Paid", color: "green" },
   pending: { label: "Pending", color: "yellow" },
   overdue: { label: "Overdue", color: "red" },
@@ -33,22 +39,22 @@ const STATUS_LABELS = {
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function AllPayments() {
-  // Viewing month — starts at current month, navigator lets admins browse
   const [viewMonth, setViewMonth] = useState(getCurrentMonth);
   const [viewYear, setViewYear] = useState(getCurrentYear);
 
   const [residents, setResidents] = useState([]);
   const [paymentMap, setPaymentMap] = useState({});
+  const [estateName, setEstateName] = useState("Estate");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Confirm modal state
   const [confirmModal, setConfirmModal] = useState(null);
   const [saving, setSaving] = useState(false);
 
-  // Bulk reminder state
   const [bulkSending, setBulkSending] = useState(false);
   const [bulkResult, setBulkResult] = useState(null);
+
+  const [exporting, setExporting] = useState(false);
 
   // ── Data loading ──────────────────────────────────────────────────────────
 
@@ -57,12 +63,14 @@ export default function AllPayments() {
       setLoading(true);
       setError(null);
 
-      const [allResidents, payments] = await Promise.all([
+      const [allResidents, payments, settings] = await Promise.all([
         getResidents(),
         getPaymentsForMonth(viewMonth, viewYear),
+        getSettings(),
       ]);
 
       setResidents(allResidents);
+      setEstateName(settings.estateName || "Estate");
 
       const map = {};
       payments.forEach((p) => {
@@ -105,21 +113,15 @@ export default function AllPayments() {
   const isCurrentMonth =
     viewMonth === getCurrentMonth() && viewYear === getCurrentYear();
 
-  // ── Cell click → open confirm modal ──────────────────────────────────────
+  // ── Cell click ────────────────────────────────────────────────────────────
 
   const handleCellClick = (resident, currentPayment) => {
     const currentStatus = currentPayment?.status ?? "pending";
     const nextStatus = STATUS_CYCLE[currentStatus];
-
-    setConfirmModal({
-      resident,
-      currentPayment,
-      currentStatus,
-      nextStatus,
-    });
+    setConfirmModal({ resident, currentPayment, currentStatus, nextStatus });
   };
 
-  // ── Confirm modal → save ──────────────────────────────────────────────────
+  // ── Confirm → save ────────────────────────────────────────────────────────
 
   const handleConfirm = async () => {
     if (!confirmModal) return;
@@ -127,8 +129,6 @@ export default function AllPayments() {
 
     try {
       setSaving(true);
-
-      // Determine levy amount
       const amount = currentPayment?.amount ?? 0;
 
       const updated = await upsertPayment({
@@ -142,7 +142,6 @@ export default function AllPayments() {
         loggedBy: resident.houseNumber,
       });
 
-      // Update resident-level status
       await updateResident(resident.id, {
         paymentStatus: nextStatus,
         monthsOverdue:
@@ -151,7 +150,6 @@ export default function AllPayments() {
             : resident.monthsOverdue,
       });
 
-      // Send notification email
       if (nextStatus === "paid") {
         await sendPaymentConfirmation(resident, updated, viewMonth, viewYear);
       } else if (nextStatus === "overdue") {
@@ -166,7 +164,7 @@ export default function AllPayments() {
     }
   };
 
-  // ── Bulk reminder ─────────────────────────────────────────────────────────
+  // ── Bulk reminder — correct email type per status ─────────────────────────
 
   const handleBulkReminder = async () => {
     try {
@@ -174,8 +172,8 @@ export default function AllPayments() {
       setBulkResult(null);
 
       const targets = residents.filter((r) => {
-        const p = paymentMap[r.houseNumber];
-        return !p || p.status === "pending" || p.status === "overdue";
+        const status = paymentMap[r.houseNumber]?.status ?? "pending";
+        return status === "pending" || status === "overdue";
       });
 
       let sent = 0;
@@ -184,7 +182,17 @@ export default function AllPayments() {
       for (const r of targets) {
         try {
           const p = paymentMap[r.houseNumber];
-          await sendOverdueNotice(r, p ?? { amount: 0 }, viewMonth, viewYear);
+          const status = p?.status ?? "pending";
+          if (status === "overdue") {
+            await sendOverdueNotice(r, p ?? { amount: 0 }, viewMonth, viewYear);
+          } else {
+            await sendPaymentReminder(
+              r,
+              p ?? { amount: 0 },
+              viewMonth,
+              viewYear,
+            );
+          }
           sent++;
         } catch {
           failed++;
@@ -199,6 +207,36 @@ export default function AllPayments() {
     }
   };
 
+  // ── Export ────────────────────────────────────────────────────────────────
+
+  const handleExportCSV = () => {
+    try {
+      setExporting(true);
+      const payments = residents
+        .map((r) => paymentMap[r.houseNumber])
+        .filter(Boolean);
+      exportPaymentsCSV(payments, residents, viewMonth, viewYear);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleExportPDF = () => {
+    try {
+      setExporting(true);
+      const payments = residents
+        .map((r) => paymentMap[r.houseNumber])
+        .filter(Boolean);
+      exportPaymentsPDF(payments, residents, viewMonth, viewYear, estateName);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   if (loading) {
@@ -209,56 +247,84 @@ export default function AllPayments() {
     );
   }
 
-  const pendingOrOverdue = residents.filter((r) => {
-    const p = paymentMap[r.houseNumber];
-    return !p || p.status === "pending" || p.status === "overdue";
+  const pendingOrOverdueCount = residents.filter((r) => {
+    const status = paymentMap[r.houseNumber]?.status ?? "pending";
+    return status === "pending" || status === "overdue";
   }).length;
+
+  const statusCounts = residents.reduce(
+    (acc, r) => {
+      const s = paymentMap[r.houseNumber]?.status ?? "pending";
+      acc[s] = (acc[s] ?? 0) + 1;
+      return acc;
+    },
+    { paid: 0, pending: 0, overdue: 0 },
+  );
 
   return (
     <div className='space-y-6 animate-fade-in'>
       {/* ── Header ── */}
-      <div className='flex flex-wrap items-center justify-between gap-4'>
+      <div className='flex flex-wrap items-start justify-between gap-4'>
         <div>
           <h1 className='text-2xl font-display font-semibold text-zinc-900 dark:text-zinc-100'>
             Payment Records
           </h1>
           <p className='mt-1 text-sm text-zinc-500 dark:text-zinc-400'>
-            Click any cell to cycle its status.
+            Click any status cell to cycle it. Use the navigator to browse past
+            months.
           </p>
         </div>
 
-        {/* Bulk reminder */}
-        {pendingOrOverdue > 0 && (
+        <div className='flex flex-wrap gap-2'>
+          {pendingOrOverdueCount > 0 && (
+            <Button
+              variant='outline'
+              onClick={handleBulkReminder}
+              disabled={bulkSending}
+            >
+              {bulkSending ? (
+                <Spinner size='sm' />
+              ) : (
+                `Send Reminders (${pendingOrOverdueCount})`
+              )}
+            </Button>
+          )}
+
           <Button
-            variant='outline'
-            onClick={handleBulkReminder}
-            disabled={bulkSending}
+            variant='secondary'
+            onClick={handleExportCSV}
+            disabled={exporting || residents.length === 0}
+            title='Download as CSV spreadsheet'
           >
-            {bulkSending ? (
-              <Spinner size='sm' />
-            ) : (
-              `Send Reminders (${pendingOrOverdue})`
-            )}
+            ↓ CSV
           </Button>
-        )}
+
+          <Button
+            variant='secondary'
+            onClick={handleExportPDF}
+            disabled={exporting || residents.length === 0}
+            title='Open print dialog to save as PDF'
+          >
+            ↓ PDF
+          </Button>
+        </div>
       </div>
 
       {error && <Alert variant='error'>{error}</Alert>}
 
       {bulkResult && (
         <Alert variant={bulkResult.failed > 0 ? "warning" : "success"}>
-          Sent {bulkResult.sent} reminder
-          {bulkResult.sent !== 1 ? "s" : ""}.
+          Sent {bulkResult.sent} reminder{bulkResult.sent !== 1 ? "s" : ""}.
           {bulkResult.failed > 0 && ` ${bulkResult.failed} failed.`}
         </Alert>
       )}
 
-      {/* ── Month Navigator ── */}
+      {/* ── Month navigator ── */}
       <Card className='p-4'>
         <div className='flex items-center justify-between gap-2'>
           <button
             onClick={goToPrev}
-            className='p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors text-zinc-600 dark:text-zinc-300'
+            className='p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors text-zinc-500 dark:text-zinc-400 text-xl leading-none'
             aria-label='Previous month'
           >
             ‹
@@ -280,7 +346,7 @@ export default function AllPayments() {
 
           <button
             onClick={goToNext}
-            className='p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors text-zinc-600 dark:text-zinc-300'
+            className='p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors text-zinc-500 dark:text-zinc-400 text-xl leading-none'
             aria-label='Next month'
           >
             ›
@@ -290,18 +356,9 @@ export default function AllPayments() {
 
       {/* ── Summary chips ── */}
       <div className='flex flex-wrap gap-2'>
-        {Object.entries(
-          residents.reduce(
-            (acc, r) => {
-              const status = paymentMap[r.houseNumber]?.status ?? "pending";
-              acc[status] = (acc[status] ?? 0) + 1;
-              return acc;
-            },
-            { paid: 0, pending: 0, overdue: 0 },
-          ),
-        ).map(([status, count]) => (
-          <Badge key={status} color={STATUS_LABELS[status]?.color ?? "zinc"}>
-            {count} {STATUS_LABELS[status]?.label ?? status}
+        {Object.entries(statusCounts).map(([status, count]) => (
+          <Badge key={status} color={STATUS_META[status]?.color ?? "zinc"}>
+            {count} {STATUS_META[status]?.label ?? status}
           </Badge>
         ))}
       </div>
@@ -317,7 +374,7 @@ export default function AllPayments() {
             <table className='w-full text-sm'>
               <thead>
                 <tr className='border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50'>
-                  <th className='px-4 py-3 text-left font-medium text-zinc-500 dark:text-zinc-400 w-16'>
+                  <th className='px-4 py-3 text-left font-medium text-zinc-500 dark:text-zinc-400 w-20'>
                     House
                   </th>
                   <th className='px-4 py-3 text-left font-medium text-zinc-500 dark:text-zinc-400'>
@@ -338,7 +395,7 @@ export default function AllPayments() {
                 {residents.map((resident) => {
                   const payment = paymentMap[resident.houseNumber];
                   const status = payment?.status ?? "pending";
-                  const badge = STATUS_LABELS[status];
+                  const meta = STATUS_META[status];
 
                   return (
                     <tr
@@ -348,8 +405,10 @@ export default function AllPayments() {
                       <td className='px-4 py-3 font-mono font-medium text-zinc-700 dark:text-zinc-300'>
                         {resident.houseNumber}
                       </td>
-                      <td className='px-4 py-3 text-zinc-800 dark:text-zinc-200'>
-                        <div>{resident.name}</div>
+                      <td className='px-4 py-3'>
+                        <div className='text-zinc-800 dark:text-zinc-200'>
+                          {resident.name}
+                        </div>
                         <div className='text-xs text-zinc-400'>
                           {resident.email}
                         </div>
@@ -360,8 +419,8 @@ export default function AllPayments() {
                           className='focus:outline-none focus:ring-2 focus:ring-green-500 rounded'
                           title='Click to change status'
                         >
-                          <Badge color={badge?.color ?? "zinc"}>
-                            {badge?.label ?? status}
+                          <Badge color={meta?.color ?? "zinc"}>
+                            {meta?.label ?? status}
                           </Badge>
                         </button>
                       </td>
@@ -370,9 +429,11 @@ export default function AllPayments() {
                           ? `KES ${payment.amount.toLocaleString()}`
                           : "—"}
                       </td>
-                      <td className='px-4 py-3 text-zinc-500 dark:text-zinc-400 text-xs'>
+                      <td className='px-4 py-3 text-xs text-zinc-500 dark:text-zinc-400'>
                         {payment?.datePaid
-                          ? new Date(payment.datePaid).toLocaleDateString()
+                          ? new Date(payment.datePaid).toLocaleDateString(
+                              "en-KE",
+                            )
                           : "—"}
                       </td>
                     </tr>
@@ -384,7 +445,7 @@ export default function AllPayments() {
         </Card>
       )}
 
-      {/* ── Confirm Modal ── */}
+      {/* ── Confirm modal ── */}
       {confirmModal && (
         <div className='fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm'>
           <Card className='w-full max-w-md p-6 space-y-4 animate-fade-in'>
@@ -410,12 +471,12 @@ export default function AllPayments() {
                 {formatMonthYear(viewMonth, viewYear)}
               </div>
               <div className='pt-2 flex items-center gap-2'>
-                <Badge color={STATUS_LABELS[confirmModal.currentStatus]?.color}>
-                  {STATUS_LABELS[confirmModal.currentStatus]?.label}
+                <Badge color={STATUS_META[confirmModal.currentStatus]?.color}>
+                  {STATUS_META[confirmModal.currentStatus]?.label}
                 </Badge>
                 <span className='text-zinc-400'>→</span>
-                <Badge color={STATUS_LABELS[confirmModal.nextStatus]?.color}>
-                  {STATUS_LABELS[confirmModal.nextStatus]?.label}
+                <Badge color={STATUS_META[confirmModal.nextStatus]?.color}>
+                  {STATUS_META[confirmModal.nextStatus]?.label}
                 </Badge>
               </div>
             </div>
