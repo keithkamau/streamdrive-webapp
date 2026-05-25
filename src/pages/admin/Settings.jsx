@@ -1,592 +1,534 @@
-import { useState, useEffect } from "react";
-import { Card, Button, Input, Alert, Badge } from "../../components/ui";
-import { getSettings, updateSettings } from "../../services/settingsService";
-import { ADMIN_HOUSES } from "../../data/estateConfig";import { seedNewMonth } from "../../services/residentService";
+import { useState, useEffect, useCallback } from "react";
+import {
+  getCurrentMonth,
+  getCurrentYear,
+  formatMonthYear,
+  allMonths,
+} from "../../lib/dateUtils";
+import { seedMonthlyPayments } from "../../services/paymentService";
+import {
+  getSettings,
+  updateSettings,
+  getAdminHouses,
+  addAdminHouse,
+  removeAdminHouse,
+} from "../../services/settingsService";
+import {
+  Button,
+  Input,
+  Select,
+  Card,
+  Alert,
+  Spinner,
+  Divider,
+  Badge,
+} from "../../components/ui/index";
 
-const TABS = ["General", "Levy", "Admins", "Notifications"];
+// ─── Tab IDs ─────────────────────────────────────────────────────────────────
+
+const TABS = [
+  { id: "general", label: "General" },
+  { id: "levy", label: "Levy" },
+  { id: "admins", label: "Admin Houses" },
+  { id: "notifications", label: "Notifications" },
+];
+
+// ─── Year options for seed dropdown (current year ± 1) ───────────────────────
+
+function yearOptions() {
+  const y = getCurrentYear();
+  return [y - 1, y, y + 1].map((yr) => ({ value: yr, label: String(yr) }));
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export default function Settings() {
-  const [activeTab, setActiveTab] = useState("General");
-  const [pageLoading, setPageLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState("");
-  const [error, setError] = useState("");
+  const [activeTab, setActiveTab] = useState("general");
 
-  const [estateName, setEstateName] = useState("Stream Drive");
-  const [estateLocation, setEstateLocation] = useState("Nairobi, Kenya");
-  const [levyAmount, setLevyAmount] = useState(3000);
-  const [levyDueDay, setLevyDueDay] = useState("end");
-  const [emailReminders, setEmailReminders] = useState(true);
-  const [reminderDays, setReminderDays] = useState(7);
-  const [overdueReminders, setOverdueReminders] = useState(true);
-  const [seedMonth, setSeedMonth] = useState("June");
-  const [seedYear, setSeedYear] = useState(2025);
+  // ── General / Levy / Notifications form ──────────────────────────────────
+  const [form, setForm] = useState({
+    estateName: "",
+    location: "",
+    levyAmount: "",
+    levyDueDay: "5",
+    emailReminders: true,
+    reminderDays: "3",
+    overdueReminders: true,
+  });
+  const [formLoading, setFormLoading] = useState(true);
+  const [formSaving, setFormSaving] = useState(false);
+  const [formMessage, setFormMessage] = useState(null);
+
+  // ── Admin houses ──────────────────────────────────────────────────────────
+  const [adminHouses, setAdminHouses] = useState([]);
+  const [newAdminHouse, setNewAdminHouse] = useState("");
+  const [adminHousesLoading, setAdminHousesLoading] = useState(true);
+  const [adminHousesMsg, setAdminHousesMsg] = useState(null);
+
+  // ── Seed payments ─────────────────────────────────────────────────────────
+  // Default seed target = current month/year (dynamic)
+  const [seedMonth, setSeedMonth] = useState(getCurrentMonth);
+  const [seedYear, setSeedYear] = useState(getCurrentYear);
   const [seeding, setSeeding] = useState(false);
-  const [seedSuccess, setSeedSuccess] = useState("");
+  const [seedMsg, setSeedMsg] = useState(null);
 
-  useEffect(() => {
-    getSettings()
-      .then((s) => {
-        setEstateName(s.estateName);
-        setEstateLocation(s.location);
-        setLevyAmount(s.levyAmount);
-        setLevyDueDay(s.levyDueDay);
-        setEmailReminders(s.emailReminders);
-        setReminderDays(s.reminderDays);
-        setOverdueReminders(s.overdueReminders);
-      })
-      .catch(() => setError("Failed to load settings."))
-      .finally(() => setPageLoading(false));
+  // ── Load settings ─────────────────────────────────────────────────────────
+
+  const loadSettings = useCallback(async () => {
+    try {
+      setFormLoading(true);
+      const s = await getSettings();
+      setForm({
+        estateName: s.estateName ?? "",
+        location: s.location ?? "",
+        levyAmount: String(s.levyAmount ?? ""),
+        levyDueDay: String(s.levyDueDay ?? "5"),
+        emailReminders: s.emailReminders ?? true,
+        reminderDays: String(s.reminderDays ?? "3"),
+        overdueReminders: s.overdueReminders ?? true,
+      });
+    } catch (err) {
+      setFormMessage({ type: "error", text: err.message });
+    } finally {
+      setFormLoading(false);
+    }
   }, []);
 
-  const showSaved = (msg = "Settings saved successfully.") => {
-    setSaved(msg);
-    setTimeout(() => setSaved(""), 3000);
-  };
-
-  const handleSave = async (fields, msg) => {
-    setSaving(true);
-    setError("");
+  const loadAdminHouses = useCallback(async () => {
     try {
-      await updateSettings(fields);
-      showSaved(msg);
-    } catch {
-      setError("Failed to save settings. Please try again.");
+      setAdminHousesLoading(true);
+      const list = await getAdminHouses();
+      setAdminHouses(list);
+    } catch (err) {
+      setAdminHousesMsg({ type: "error", text: err.message });
+    } finally {
+      setAdminHousesLoading(false);
     }
-    setSaving(false);
+  }, []);
+
+  useEffect(() => {
+    loadSettings();
+    loadAdminHouses();
+  }, [loadSettings, loadAdminHouses]);
+
+  // ── Handlers ──────────────────────────────────────────────────────────────
+
+  const handleFormChange = (key, value) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
   };
 
-  const handleSeedMonth = async () => {
-    setSeeding(true);
-    setSeedSuccess("");
+  const handleSaveSettings = async () => {
     try {
-      await seedNewMonth(seedMonth, seedYear);
-      setSeedSuccess(
-        `Pending payment records seeded for ${seedMonth} ${seedYear}.`,
-      );
-      setTimeout(() => setSeedSuccess(""), 4000);
-    } catch {
-      setError("Failed to seed payments. Please try again.");
+      setFormSaving(true);
+      setFormMessage(null);
+      await updateSettings({
+        estateName: form.estateName,
+        location: form.location,
+        levyAmount: parseFloat(form.levyAmount) || 0,
+        levyDueDay: parseInt(form.levyDueDay) || 5,
+        emailReminders: form.emailReminders,
+        reminderDays: parseInt(form.reminderDays) || 3,
+        overdueReminders: form.overdueReminders,
+      });
+      setFormMessage({ type: "success", text: "Settings saved." });
+    } catch (err) {
+      setFormMessage({ type: "error", text: err.message });
+    } finally {
+      setFormSaving(false);
     }
-    setSeeding(false);
   };
 
-  if (pageLoading) {
-    return (
-      <div className='flex items-center justify-center h-64'>
-        <div className='flex flex-col items-center gap-3'>
-          <svg
-            className='animate-spin w-6 h-6 text-green-500'
-            fill='none'
-            viewBox='0 0 24 24'
-          >
-            <circle
-              className='opacity-25'
-              cx='12'
-              cy='12'
-              r='10'
-              stroke='currentColor'
-              strokeWidth='4'
-            />
-            <path
-              className='opacity-75'
-              fill='currentColor'
-              d='M4 12a8 8 0 018-8v8H4z'
-            />
-          </svg>
-          <p className='text-sm text-zinc-400'>Loading settings...</p>
-        </div>
-      </div>
-    );
-  }
+  const handleAddAdminHouse = async () => {
+    const house = newAdminHouse.trim().toUpperCase();
+    if (!house) return;
+    try {
+      setAdminHousesMsg(null);
+      await addAdminHouse(house);
+      setNewAdminHouse("");
+      await loadAdminHouses();
+      setAdminHousesMsg({
+        type: "success",
+        text: `${house} added as admin house.`,
+      });
+    } catch (err) {
+      setAdminHousesMsg({ type: "error", text: err.message });
+    }
+  };
+
+  const handleRemoveAdminHouse = async (house) => {
+    try {
+      setAdminHousesMsg(null);
+      await removeAdminHouse(house);
+      await loadAdminHouses();
+      setAdminHousesMsg({ type: "success", text: `${house} removed.` });
+    } catch (err) {
+      setAdminHousesMsg({ type: "error", text: err.message });
+    }
+  };
+
+  const handleSeedPayments = async () => {
+    try {
+      setSeeding(true);
+      setSeedMsg(null);
+      await seedMonthlyPayments(seedMonth, seedYear);
+      setSeedMsg({
+        type: "success",
+        text: `Pending payments seeded for ${formatMonthYear(seedMonth, seedYear)}.`,
+      });
+    } catch (err) {
+      setSeedMsg({ type: "error", text: err.message });
+    } finally {
+      setSeeding(false);
+    }
+  };
+
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className='max-w-3xl mx-auto flex flex-col gap-6 animate-fade-in'>
+    <div className='space-y-6 animate-fade-in'>
       <div>
-        <h2 className='font-display font-bold text-zinc-900 text-xl'>
+        <h1 className='text-2xl font-display font-semibold text-zinc-900 dark:text-zinc-100'>
           Settings
-        </h2>
-        <p className='text-sm text-zinc-400 mt-0.5'>
-          Manage estate configuration and preferences
+        </h1>
+        <p className='mt-1 text-sm text-zinc-500 dark:text-zinc-400'>
+          Manage your estate configuration.
         </p>
       </div>
 
-      {saved && <Alert variant='success'>{saved}</Alert>}
-      {error && <Alert variant='danger'>{error}</Alert>}
-
-      {/* Tabs */}
-      <div className='flex gap-1 bg-zinc-100 border border-zinc-200 p-1 rounded-xl w-fit flex-wrap'>
+      {/* ── Tabs ── */}
+      <div className='flex gap-1 border-b border-zinc-200 dark:border-zinc-700'>
         {TABS.map((tab) => (
           <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all duration-150 ${
-              activeTab === tab
-                ? "bg-white text-zinc-900 shadow-sm border border-zinc-200"
-                : "text-zinc-500 hover:text-zinc-900"
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
+              activeTab === tab.id
+                ? "border-green-600 text-green-600 dark:text-green-400"
+                : "border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
             }`}
           >
-            {tab}
+            {tab.label}
           </button>
         ))}
       </div>
 
-      {/* ── General ──────────────────────────────────────────────────────────── */}
-      {activeTab === "General" && (
-        <Card className='p-6 flex flex-col gap-6'>
-          <div>
-            <h3 className='font-display font-bold text-zinc-900 text-base mb-1'>
-              Estate Information
-            </h3>
-            <p className='text-xs text-zinc-400'>
-              Basic details about Stream Drive estate
-            </p>
-          </div>
-          <div className='flex flex-col gap-4'>
-            <Input
-              label='Estate Name'
-              value={estateName}
-              onChange={(e) => setEstateName(e.target.value)}
-              placeholder='Stream Drive'
-            />
-            <Input
-              label='Location'
-              value={estateLocation}
-              onChange={(e) => setEstateLocation(e.target.value)}
-              placeholder='Nairobi, Kenya'
-            />
-            <div className='flex flex-col gap-1.5'>
-              <label className='text-xs font-semibold uppercase tracking-widest text-zinc-500'>
-                Total Houses
-              </label>
-              <div className='flex items-center gap-2 px-3.5 py-2.5 bg-zinc-50 border border-zinc-200 rounded-lg'>
-                <span className='text-sm text-zinc-900 font-medium'>
-                  {HOUSE_NUMBERS.length} houses
-                </span>
-                <span className='text-xs text-zinc-400'>
-                  (configured in estateConfig.js)
-                </span>
-              </div>
+      {/* ──────────────────────────────────────────────────────────────────── */}
+      {/* GENERAL TAB                                                          */}
+      {/* ──────────────────────────────────────────────────────────────────── */}
+      {activeTab === "general" && (
+        <Card className='p-6 space-y-5'>
+          {formLoading ? (
+            <div className='flex justify-center py-8'>
+              <Spinner />
             </div>
-          </div>
-          <div className='pt-2 border-t border-zinc-100 flex justify-end'>
-            <Button
-              onClick={() =>
-                handleSave({ estateName, location: estateLocation })
-              }
-              size='md'
-              loading={saving}
-            >
-              Save Changes
-            </Button>
-          </div>
-        </Card>
-      )}
+          ) : (
+            <>
+              <h2 className='font-display font-semibold text-zinc-800 dark:text-zinc-100'>
+                Estate Details
+              </h2>
 
-      {/* ── Levy ─────────────────────────────────────────────────────────────── */}
-      {activeTab === "Levy" && (
-        <Card className='p-6 flex flex-col gap-6'>
-          <div>
-            <h3 className='font-display font-bold text-zinc-900 text-base mb-1'>
-              Security Levy
-            </h3>
-            <p className='text-xs text-zinc-400'>
-              Configure the monthly security fee for all residents
-            </p>
-          </div>
-          <div className='flex flex-col gap-4'>
-            <div className='flex flex-col gap-1.5'>
-              <label className='text-xs font-semibold uppercase tracking-widest text-zinc-500'>
-                Monthly Levy Amount (KES)
-              </label>
-              <div className='relative'>
-                <span className='absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-semibold text-zinc-400'>
-                  KES
-                </span>
-                <input
-                  type='number'
-                  value={levyAmount}
-                  onChange={(e) => setLevyAmount(Number(e.target.value))}
-                  className='w-full bg-zinc-50 border border-zinc-200 rounded-lg pl-12 pr-3.5 py-2.5 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all'
+              {formMessage && (
+                <Alert variant={formMessage.type}>{formMessage.text}</Alert>
+              )}
+
+              <div className='grid gap-4 sm:grid-cols-2'>
+                <Input
+                  label='Estate Name'
+                  value={form.estateName}
+                  onChange={(e) =>
+                    handleFormChange("estateName", e.target.value)
+                  }
+                  placeholder='Stream Drive Estate'
+                />
+                <Input
+                  label='Location'
+                  value={form.location}
+                  onChange={(e) => handleFormChange("location", e.target.value)}
+                  placeholder='Nairobi, Kenya'
                 />
               </div>
-            </div>
-            <div className='flex flex-col gap-1.5'>
-              <label className='text-xs font-semibold uppercase tracking-widest text-zinc-500'>
-                Payment Due
-              </label>
-              <div className='flex gap-2'>
-                {[
-                  { value: "end", label: "End of month" },
-                  { value: "15", label: "15th of month" },
-                  { value: "1", label: "1st of month" },
-                ].map((opt) => (
-                  <button
-                    key={opt.value}
-                    onClick={() => setLevyDueDay(opt.value)}
-                    className={`flex-1 py-2.5 rounded-lg border text-sm font-medium transition-all ${
-                      levyDueDay === opt.value
-                        ? "border-green-500 bg-green-50 text-green-700"
-                        : "border-zinc-200 bg-zinc-50 text-zinc-600 hover:border-zinc-300"
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
+
+              <div className='flex justify-end pt-2'>
+                <Button
+                  variant='primary'
+                  onClick={handleSaveSettings}
+                  disabled={formSaving}
+                >
+                  {formSaving ? <Spinner size='sm' /> : "Save Changes"}
+                </Button>
               </div>
-            </div>
-            <div className='bg-green-50 border border-green-200 rounded-xl p-4'>
-              <p className='text-xs font-semibold uppercase tracking-widest text-green-700 mb-2'>
-                Preview
-              </p>
-              <p className='text-sm text-green-800'>
-                Each resident will be charged{" "}
-                <span className='font-bold'>
-                  KES {levyAmount.toLocaleString()}
-                </span>{" "}
-                per month, due{" "}
-                <span className='font-bold'>
-                  {levyDueDay === "end"
-                    ? "at the end of each month"
-                    : `on the ${levyDueDay}${levyDueDay === "1" ? "st" : "th"} of each month`}
-                </span>
-                .
-              </p>
-            </div>
-          </div>
-          {/* Seed new month */}
-          <div className='flex flex-col gap-3 pt-2 border-t border-zinc-100'>
-            <div>
-              <p className='text-xs font-semibold uppercase tracking-widest text-zinc-500 mb-1'>
-                New Month Setup
-              </p>
-              <p className='text-xs text-zinc-400'>
-                At the start of each month, seed pending payment records for all
-                current residents. Safe to run multiple times — existing records
-                are not overwritten.
-              </p>
-            </div>
-            <div className='flex items-center gap-3 flex-wrap'>
-              <select
-                value={seedMonth}
-                onChange={(e) => setSeedMonth(e.target.value)}
-                className='bg-zinc-50 border border-zinc-200 rounded-lg px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent'
-              >
-                {[
-                  "January",
-                  "February",
-                  "March",
-                  "April",
-                  "May",
-                  "June",
-                  "July",
-                  "August",
-                  "September",
-                  "October",
-                  "November",
-                  "December",
-                ].map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={seedYear}
-                onChange={(e) => setSeedYear(Number(e.target.value))}
-                className='bg-zinc-50 border border-zinc-200 rounded-lg px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent'
-              >
-                {[2025, 2026, 2027].map((y) => (
-                  <option key={y} value={y}>
-                    {y}
-                  </option>
-                ))}
-              </select>
-              <Button
-                variant='outline'
-                size='md'
-                loading={seeding}
-                onClick={handleSeedMonth}
-              >
-                Seed Payments
-              </Button>
-            </div>
-            {seedSuccess && <Alert variant='success'>{seedSuccess}</Alert>}
-          </div>
-          <div className='pt-2 border-t border-zinc-100 flex justify-end'>
-            <Button
-              onClick={() =>
-                handleSave({ levyAmount, levyDueDay }, "Levy settings saved.")
-              }
-              size='md'
-              loading={saving}
-            >
-              Save Changes
-            </Button>
-          </div>
+            </>
+          )}
         </Card>
       )}
 
-      {/* ── Admins ───────────────────────────────────────────────────────────── */}
-      {activeTab === "Admins" && (
-        <div className='flex flex-col gap-4'>
-          <Card className='p-6 flex flex-col gap-5'>
-            <div>
-              <h3 className='font-display font-bold text-zinc-900 text-base mb-1'>
-                Admin Houses
-              </h3>
-              <p className='text-xs text-zinc-400'>
-                These house numbers have full admin privileges. Update after
-                each estate election.
-              </p>
-            </div>
-            <div className='flex flex-col gap-2'>
-              {ADMIN_HOUSES.map((house) => (
-                <div
-                  key={house}
-                  className='flex items-center justify-between px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl'
-                >
-                  <div className='flex items-center gap-3'>
-                    <div className='w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center'>
-                      <svg
-                        className='w-4 h-4 text-green-600'
-                        fill='none'
-                        stroke='currentColor'
-                        strokeWidth='2'
-                        viewBox='0 0 24 24'
-                      >
-                        <path d='M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z' />
-                        <polyline points='9 22 9 12 15 12 15 22' />
-                      </svg>
-                    </div>
-                    <div>
-                      <p className='text-sm font-semibold text-zinc-900 font-mono'>
-                        {house}
-                      </p>
-                      <p className='text-xs text-zinc-400'>Admin house</p>
-                    </div>
-                  </div>
-                  <Badge variant='admin'>Admin</Badge>
-                </div>
-              ))}
-            </div>
-            <div className='bg-zinc-50 border border-zinc-200 rounded-xl p-4'>
-              <div className='flex gap-2.5 items-start'>
-                <svg
-                  className='w-4 h-4 text-zinc-400 shrink-0 mt-0.5'
-                  fill='none'
-                  stroke='currentColor'
-                  strokeWidth='2'
-                  viewBox='0 0 24 24'
-                >
-                  <circle cx='12' cy='12' r='10' />
-                  <line x1='12' y1='8' x2='12' y2='12' />
-                  <line x1='12' y1='16' x2='12.01' y2='16' />
-                </svg>
-                <p className='text-xs text-zinc-500 leading-relaxed'>
-                  To update admin privileges after an election, edit the{" "}
-                  <span className='font-mono font-semibold text-zinc-700'>
-                    ADMIN_HOUSES
-                  </span>{" "}
-                  array in{" "}
-                  <span className='font-mono font-semibold text-zinc-700'>
-                    src/data/estateConfig.js
-                  </span>
-                  . Changes take effect on next login.
-                </p>
+      {/* ──────────────────────────────────────────────────────────────────── */}
+      {/* LEVY TAB                                                             */}
+      {/* ──────────────────────────────────────────────────────────────────── */}
+      {activeTab === "levy" && (
+        <div className='space-y-6'>
+          <Card className='p-6 space-y-5'>
+            {formLoading ? (
+              <div className='flex justify-center py-8'>
+                <Spinner />
               </div>
-            </div>
+            ) : (
+              <>
+                <h2 className='font-display font-semibold text-zinc-800 dark:text-zinc-100'>
+                  Levy Configuration
+                </h2>
+
+                {formMessage && (
+                  <Alert variant={formMessage.type}>{formMessage.text}</Alert>
+                )}
+
+                <div className='grid gap-4 sm:grid-cols-2'>
+                  <Input
+                    label='Monthly Levy Amount (KES)'
+                    type='number'
+                    value={form.levyAmount}
+                    onChange={(e) =>
+                      handleFormChange("levyAmount", e.target.value)
+                    }
+                    placeholder='5000'
+                  />
+                  <Input
+                    label='Due Day of Month'
+                    type='number'
+                    min={1}
+                    max={28}
+                    value={form.levyDueDay}
+                    onChange={(e) =>
+                      handleFormChange("levyDueDay", e.target.value)
+                    }
+                    placeholder='5'
+                  />
+                </div>
+
+                <div className='flex justify-end pt-2'>
+                  <Button
+                    variant='primary'
+                    onClick={handleSaveSettings}
+                    disabled={formSaving}
+                  >
+                    {formSaving ? <Spinner size='sm' /> : "Save Changes"}
+                  </Button>
+                </div>
+              </>
+            )}
           </Card>
 
-          <Card className='p-6 flex flex-col gap-4 border-red-200'>
+          {/* Seed payments section */}
+          <Card className='p-6 space-y-4'>
             <div>
-              <h3 className='font-display font-bold text-red-600 text-base mb-1'>
-                Danger Zone
-              </h3>
-              <p className='text-xs text-zinc-400'>
-                Irreversible actions — proceed with caution.
+              <h2 className='font-display font-semibold text-zinc-800 dark:text-zinc-100'>
+                Seed Monthly Payments
+              </h2>
+              <p className='mt-1 text-sm text-zinc-500 dark:text-zinc-400'>
+                Create pending payment records for all residents for a specific
+                month. Existing records are not overwritten.
               </p>
             </div>
-            <div className='flex items-center justify-between p-4 bg-red-50 border border-red-200 rounded-xl'>
-              <div>
-                <p className='text-sm font-semibold text-zinc-900'>
-                  Reset all payment records
-                </p>
-                <p className='text-xs text-zinc-400 mt-0.5'>
-                  Clears all payment history for a new financial year.
-                </p>
+
+            {seedMsg && <Alert variant={seedMsg.type}>{seedMsg.text}</Alert>}
+
+            <div className='flex flex-wrap gap-3 items-end'>
+              {/* Month picker — uses dynamic allMonths() */}
+              <div className='w-40'>
+                <Select
+                  label='Month'
+                  value={seedMonth}
+                  onChange={(e) => setSeedMonth(Number(e.target.value))}
+                  options={allMonths()}
+                />
               </div>
-              <Button variant='danger' size='sm'>
-                Reset
+
+              {/* Year picker — shows current year ± 1 */}
+              <div className='w-32'>
+                <Select
+                  label='Year'
+                  value={seedYear}
+                  onChange={(e) => setSeedYear(Number(e.target.value))}
+                  options={yearOptions()}
+                />
+              </div>
+
+              <Button
+                variant='primary'
+                onClick={handleSeedPayments}
+                disabled={seeding}
+              >
+                {seeding ? <Spinner size='sm' /> : "Seed Payments"}
               </Button>
             </div>
+
+            <p className='text-xs text-zinc-400'>
+              Currently targeting:{" "}
+              <span className='font-medium text-zinc-600 dark:text-zinc-300'>
+                {formatMonthYear(seedMonth, seedYear)}
+              </span>
+            </p>
           </Card>
         </div>
       )}
 
-      {/* ── Notifications ────────────────────────────────────────────────────── */}
-      {activeTab === "Notifications" && (
-        <Card className='p-6 flex flex-col gap-6'>
+      {/* ──────────────────────────────────────────────────────────────────── */}
+      {/* ADMIN HOUSES TAB                                                     */}
+      {/* ──────────────────────────────────────────────────────────────────── */}
+      {activeTab === "admins" && (
+        <Card className='p-6 space-y-5'>
           <div>
-            <h3 className='font-display font-bold text-zinc-900 text-base mb-1'>
-              Reminder Settings
-            </h3>
-            <p className='text-xs text-zinc-400'>
-              Configure how and when residents are notified about payments
+            <h2 className='font-display font-semibold text-zinc-800 dark:text-zinc-100'>
+              Admin Houses
+            </h2>
+            <p className='mt-1 text-sm text-zinc-500 dark:text-zinc-400'>
+              Residents in these houses have admin privileges. Changes take
+              effect on next login.
             </p>
           </div>
-          <div className='flex flex-col gap-5'>
-            {/* Channels */}
-            <div className='flex flex-col gap-3'>
-              <p className='text-xs font-semibold uppercase tracking-widest text-zinc-500'>
-                Notification Channels
-              </p>
-              <div className='flex items-center justify-between px-4 py-3.5 bg-zinc-50 border border-zinc-200 rounded-xl'>
-                <div className='flex items-center gap-3'>
-                  <div className='w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center'>
-                    <svg
-                      className='w-4 h-4 text-blue-600'
-                      fill='none'
-                      stroke='currentColor'
-                      strokeWidth='2'
-                      viewBox='0 0 24 24'
-                    >
-                      <path d='M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z' />
-                      <polyline points='22,6 12,13 2,6' />
-                    </svg>
-                  </div>
-                  <div>
-                    <p className='text-sm font-semibold text-zinc-900'>
-                      Email Reminders
-                    </p>
-                    <p className='text-xs text-zinc-400'>
-                      Sent to resident email addresses via Supabase
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setEmailReminders(!emailReminders)}
-                  className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${
-                    emailReminders ? "bg-green-600" : "bg-zinc-300"
-                  }`}
+
+          {adminHousesMsg && (
+            <Alert variant={adminHousesMsg.type}>{adminHousesMsg.text}</Alert>
+          )}
+
+          {/* Current admin houses */}
+          {adminHousesLoading ? (
+            <div className='flex justify-center py-4'>
+              <Spinner />
+            </div>
+          ) : adminHouses.length === 0 ? (
+            <p className='text-sm text-zinc-400'>
+              No admin houses configured yet.
+            </p>
+          ) : (
+            <div className='flex flex-wrap gap-2'>
+              {adminHouses.map((house) => (
+                <span
+                  key={house}
+                  className='inline-flex items-center gap-1.5 pl-3 pr-1.5 py-1 rounded-full bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 text-sm font-medium text-green-700 dark:text-green-300'
                 >
-                  <span
-                    className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${
-                      emailReminders ? "translate-x-5" : "translate-x-0"
-                    }`}
-                  />
-                </button>
-              </div>
-            </div>
-
-            {/* Reminder timing */}
-            <div className='flex flex-col gap-3'>
-              <p className='text-xs font-semibold uppercase tracking-widest text-zinc-500'>
-                Reminder Timing
-              </p>
-              <div className='flex flex-col gap-1.5'>
-                <label className='text-xs text-zinc-500'>
-                  Send reminder this many days before due date
-                </label>
-                <div className='flex gap-2'>
-                  {[3, 5, 7, 10, 14].map((d) => (
-                    <button
-                      key={d}
-                      onClick={() => setReminderDays(d)}
-                      className={`flex-1 py-2 rounded-lg border text-sm font-semibold transition-all ${
-                        reminderDays === d
-                          ? "border-green-500 bg-green-50 text-green-700"
-                          : "border-zinc-200 bg-zinc-50 text-zinc-600 hover:border-zinc-300"
-                      }`}
-                    >
-                      {d}
-                    </button>
-                  ))}
-                </div>
-                <p className='text-xs text-zinc-400'>
-                  Reminders sent{" "}
-                  <span className='font-semibold text-zinc-600'>
-                    {reminderDays} days
-                  </span>{" "}
-                  before end of month.
-                </p>
-              </div>
-            </div>
-
-            {/* Overdue */}
-            <div className='flex flex-col gap-3'>
-              <p className='text-xs font-semibold uppercase tracking-widest text-zinc-500'>
-                Overdue Reminders
-              </p>
-              <div className='flex items-center justify-between px-4 py-3.5 bg-zinc-50 border border-zinc-200 rounded-xl'>
-                <div>
-                  <p className='text-sm font-semibold text-zinc-900'>
-                    Send overdue reminders
-                  </p>
-                  <p className='text-xs text-zinc-400'>
-                    Automatically remind residents with outstanding payments
-                  </p>
-                </div>
-                <button
-                  onClick={() => setOverdueReminders(!overdueReminders)}
-                  className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${
-                    overdueReminders ? "bg-green-600" : "bg-zinc-300"
-                  }`}
-                >
-                  <span
-                    className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${
-                      overdueReminders ? "translate-x-5" : "translate-x-0"
-                    }`}
-                  />
-                </button>
-              </div>
-            </div>
-
-            {/* Summary */}
-            <div className='bg-green-50 border border-green-200 rounded-xl p-4'>
-              <p className='text-xs font-semibold uppercase tracking-widest text-green-700 mb-2'>
-                Current Configuration
-              </p>
-              <ul className='flex flex-col gap-1.5'>
-                {[
-                  `Email reminders: ${emailReminders ? "On" : "Off"}`,
-                  `Send ${reminderDays} days before due date`,
-                  `Overdue reminders: ${overdueReminders ? "On" : "Off"}`,
-                ].map((item) => (
-                  <li
-                    key={item}
-                    className='flex items-center gap-2 text-xs text-green-800'
+                  {house}
+                  <button
+                    onClick={() => handleRemoveAdminHouse(house)}
+                    className='w-4 h-4 rounded-full hover:bg-green-200 dark:hover:bg-green-700 flex items-center justify-center text-green-600 dark:text-green-400 transition-colors'
+                    aria-label={`Remove ${house}`}
                   >
-                    <svg
-                      className='w-3.5 h-3.5 text-green-500 shrink-0'
-                      fill='none'
-                      stroke='currentColor'
-                      strokeWidth='2.5'
-                      viewBox='0 0 24 24'
-                    >
-                      <polyline points='20 6 9 17 4 12' />
-                    </svg>
-                    {item}
-                  </li>
-                ))}
-              </ul>
+                    ×
+                  </button>
+                </span>
+              ))}
             </div>
-          </div>
+          )}
 
-          <div className='pt-2 border-t border-zinc-100 flex justify-end'>
+          <Divider />
+
+          {/* Add new admin house */}
+          <div className='flex gap-2'>
+            <Input
+              placeholder='House number, e.g. A1'
+              value={newAdminHouse}
+              onChange={(e) => setNewAdminHouse(e.target.value.toUpperCase())}
+              onKeyDown={(e) => e.key === "Enter" && handleAddAdminHouse()}
+              className='flex-1'
+            />
             <Button
-              onClick={() =>
-                handleSave(
-                  { emailReminders, reminderDays, overdueReminders },
-                  "Notification settings saved.",
-                )
-              }
-              size='md'
-              loading={saving}
+              variant='primary'
+              onClick={handleAddAdminHouse}
+              disabled={!newAdminHouse.trim()}
             >
-              Save Changes
+              Add
             </Button>
           </div>
+        </Card>
+      )}
+
+      {/* ──────────────────────────────────────────────────────────────────── */}
+      {/* NOTIFICATIONS TAB                                                    */}
+      {/* ──────────────────────────────────────────────────────────────────── */}
+      {activeTab === "notifications" && (
+        <Card className='p-6 space-y-5'>
+          {formLoading ? (
+            <div className='flex justify-center py-8'>
+              <Spinner />
+            </div>
+          ) : (
+            <>
+              <h2 className='font-display font-semibold text-zinc-800 dark:text-zinc-100'>
+                Email Notifications
+              </h2>
+
+              {formMessage && (
+                <Alert variant={formMessage.type}>{formMessage.text}</Alert>
+              )}
+
+              <div className='space-y-4'>
+                {/* Email reminders toggle */}
+                <label className='flex items-start gap-3 cursor-pointer'>
+                  <input
+                    type='checkbox'
+                    checked={form.emailReminders}
+                    onChange={(e) =>
+                      handleFormChange("emailReminders", e.target.checked)
+                    }
+                    className='mt-0.5 h-4 w-4 rounded border-zinc-300 text-green-600 focus:ring-green-500'
+                  />
+                  <div>
+                    <p className='text-sm font-medium text-zinc-800 dark:text-zinc-200'>
+                      Automatic payment reminders
+                    </p>
+                    <p className='text-xs text-zinc-500 dark:text-zinc-400'>
+                      Send reminders before the levy due date.
+                    </p>
+                  </div>
+                </label>
+
+                {form.emailReminders && (
+                  <div className='ml-7 w-48'>
+                    <Input
+                      label='Days before due date'
+                      type='number'
+                      min={1}
+                      max={14}
+                      value={form.reminderDays}
+                      onChange={(e) =>
+                        handleFormChange("reminderDays", e.target.value)
+                      }
+                    />
+                  </div>
+                )}
+
+                {/* Overdue reminders toggle */}
+                <label className='flex items-start gap-3 cursor-pointer'>
+                  <input
+                    type='checkbox'
+                    checked={form.overdueReminders}
+                    onChange={(e) =>
+                      handleFormChange("overdueReminders", e.target.checked)
+                    }
+                    className='mt-0.5 h-4 w-4 rounded border-zinc-300 text-green-600 focus:ring-green-500'
+                  />
+                  <div>
+                    <p className='text-sm font-medium text-zinc-800 dark:text-zinc-200'>
+                      Overdue payment notices
+                    </p>
+                    <p className='text-xs text-zinc-500 dark:text-zinc-400'>
+                      Send an email when a payment is marked overdue.
+                    </p>
+                  </div>
+                </label>
+              </div>
+
+              <div className='flex justify-end pt-2'>
+                <Button
+                  variant='primary'
+                  onClick={handleSaveSettings}
+                  disabled={formSaving}
+                >
+                  {formSaving ? <Spinner size='sm' /> : "Save Changes"}
+                </Button>
+              </div>
+            </>
+          )}
         </Card>
       )}
     </div>
