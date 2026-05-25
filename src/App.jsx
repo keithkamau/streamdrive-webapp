@@ -132,7 +132,168 @@ function renderPage(currentPage) {
     case "profile":
       return <Profile />;
     default:
-      return (
+      return (// App.jsx
+import { useState, useEffect } from "react";
+import { useAuth } from "./context/AuthContext";
+import { usePWA } from "./hooks/usePWA";
+import AppShell from "./components/layout/AppShell";
+import AuthLayout from "./components/auth/AuthLayout";
+import ResetPasswordPage from "./components/auth/ResetPasswordPage";
+
+// ─── Pages ────────────────────────────────────────────────────────────────────
+import Dashboard from "./pages/resident/Dashboard";
+import Announcements from "./pages/resident/Announcements";
+import AllPayments from "./pages/admin/AllPayments";
+import Residents from "./pages/admin/Residents";
+import Houses from "./pages/admin/Houses";
+import Settings from "./pages/admin/Settings";
+import Profile from "./pages/admin/Profile";
+
+// ─── Valid hashes → page components ──────────────────────────────────────────
+const PAGE_MAP = {
+  dashboard: Dashboard,
+  announcements: Announcements,
+  "admin-payments": AllPayments,
+  residents: Residents,
+  houses: Houses,
+  settings: Settings,
+  profile: Profile,
+};
+
+// ─── Parse the current hash ───────────────────────────────────────────────────
+function getHash() {
+  return window.location.hash.replace(/^#\/?/, "") || "dashboard";
+}
+
+// ─── Detect if Supabase pasted a recovery token into the URL fragment ─────────
+// Supabase recovery links arrive as:
+//   https://yourapp.com/#access_token=…&type=recovery&…
+// We detect this and normalise the hash to "reset-password" so our router
+// renders ResetPasswordPage (which then calls supabase.auth.getSession()).
+function isRecoveryFragment() {
+  const hash = window.location.hash;
+  return hash.includes("type=recovery") || hash.includes("type%3Drecovery");
+}
+
+export default function App() {
+  const { user, loading: authLoading } = useAuth();
+  const { isOnline, installPrompt, handleInstall, dismissInstall } = usePWA();
+
+  // If the URL contains a Supabase recovery token, seed the hash accordingly
+  // before we read it. This must happen before useState initialises currentPage.
+  useEffect(() => {
+    if (isRecoveryFragment()) {
+      // Preserve the token in the hash so Supabase can consume it, but also
+      // add our route marker so the router knows to show ResetPasswordPage.
+      // We keep the fragment intact; ResetPasswordPage reads the session, not
+      // the raw hash values.
+      window.location.hash = "reset-password";
+    }
+  }, []);
+
+  const [currentPage, setCurrentPage] = useState(() => {
+    if (isRecoveryFragment()) return "reset-password";
+    const h = getHash();
+    // If hash is "reset-password" we return it regardless of auth state —
+    // ResetPasswordPage handles its own session verification.
+    if (h === "reset-password") return "reset-password";
+    return h;
+  });
+
+  // ── Listen for hash changes ───────────────────────────────────────────────
+
+  useEffect(() => {
+    const onHashChange = () => {
+      const h = getHash();
+      if (h === "reset-password") {
+        setCurrentPage("reset-password");
+        return;
+      }
+      // Only navigate to known pages; fall back to dashboard
+      setCurrentPage(PAGE_MAP[h] ? h : "dashboard");
+    };
+
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, []);
+
+  // Keep the URL hash in sync when currentPage changes programmatically
+  useEffect(() => {
+    const desired = `#${currentPage}`;
+    if (window.location.hash !== desired) {
+      window.location.hash = desired;
+    }
+  }, [currentPage]);
+
+  // ── Loading ───────────────────────────────────────────────────────────────
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-green-600 animate-pulse" />
+          <p className="text-sm text-zinc-500">Loading…</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Password reset — show regardless of auth state ────────────────────────
+
+  if (currentPage === "reset-password") {
+    return <ResetPasswordPage />;
+  }
+
+  // ── Unauthenticated ───────────────────────────────────────────────────────
+
+  if (!user) {
+    return <AuthLayout />;
+  }
+
+  // ── Authenticated ─────────────────────────────────────────────────────────
+
+  const PageComponent = PAGE_MAP[currentPage] ?? Dashboard;
+
+  return (
+    <>
+      {/* ── PWA: offline banner ── */}
+      {!isOnline && (
+        <div className="fixed top-0 inset-x-0 z-50 bg-yellow-400 text-yellow-900 text-center text-sm py-1.5 font-medium">
+          You're offline — some features may be unavailable.
+        </div>
+      )}
+
+      {/* ── PWA: install prompt ── */}
+      {installPrompt && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-2xl shadow-xl p-4 flex items-center gap-3 w-[calc(100%-2rem)] max-w-sm animate-fade-in">
+          <div className="text-2xl">🏡</div>
+          <div className="flex-1">
+            <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+              Install Stream Drive
+            </p>
+            <p className="text-xs text-zinc-500">Add to your home screen</p>
+          </div>
+          <button
+            onClick={handleInstall}
+            className="text-sm font-semibold text-green-600 hover:text-green-700 transition-colors"
+          >
+            Install
+          </button>
+          <button
+            onClick={dismissInstall}
+            className="text-sm text-zinc-400 hover:text-zinc-600 transition-colors"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      <AppShell currentPage={currentPage} setCurrentPage={setCurrentPage}>
+        <PageComponent />
+      </AppShell>
+    </>
+  );
+}
         <div className='flex items-center justify-center h-full text-zinc-400 text-sm'>
           Page not found
         </div>
