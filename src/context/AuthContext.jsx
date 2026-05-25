@@ -1,119 +1,133 @@
-import { createContext, useContext, useState, useEffect } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useCallback,
+} from "react";
 import { supabase } from "../lib/supabase";
+import { getResidentByEmail } from "../services/residentService";
+import { isAdminHouse } from "../services/settingsService";
+
+// ─── Context ──────────────────────────────────────────────────────────────────
 
 const AuthContext = createContext(null);
 
-export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  const resolveProfile = async (authUser) => {
-    if (!authUser) {
-      console.log("[Auth] No auth user");
-      setUser(null);
-      return;
-    }
-
-    console.log("[Auth] Auth user found:", authUser.email);
-
-    const { data, error } = await supabase
-      .from("residents")
-      .select("*")
-      .eq("email", authUser.email)
-      .single();
-
-    console.log("[Auth] Resident lookup:", { data, error });
-
-    if (error || !data) {
-      console.log("[Auth] No resident record found — signing out");
-      await supabase.auth.signOut();
-      setUser(null);
-      return;
-    }
-
-    if (!data.is_admin) {
-      console.log("[Auth] Resident is not admin — signing out");
-      await supabase.auth.signOut();
-      setUser(null);
-      return;
-    }
-
-    console.log("[Auth] Admin resolved successfully:", data.name);
-
-    setUser({
-      id: authUser.id,
-      firstName: data.name.split(" ")[0],
-      lastName: data.name.split(" ").slice(1).join(" "),
-      name: data.name,
-      email: data.email,
-      phone: data.phone,
-      houseNumber: data.house_number,
-      isAdmin: data.is_admin,
-    });
-  };
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log(
-        "[Auth] Initial session:",
-        session ? session.user.email : "none",
-      );
-      resolveProfile(session?.user ?? null).finally(() => setLoading(false));
-    });
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      console.log(
-        "[Auth] Auth state change:",
-        _event,
-        session?.user?.email ?? "none",
-      );
-      resolveProfile(session?.user ?? null);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const login = async ({ email, password }) => {
-  console.log('[Auth] Attempting login for:', email);
-
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  });
-
-  console.log('[Auth] Login data:', data);
-  console.log('[Auth] Login error:', error?.message, error?.status);
-
-  if (error) {
-    return { success: false, error: error.message };
-  }
-
-  return { success: true };
-};
-
-  const logout = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-  };
-
-  const refreshUser = async () => {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    await resolveProfile(session?.user ?? null);
-  };
-
-  return (
-    <AuthContext.Provider value={{ user, loading, login, logout, refreshUser }}>
-      {children}
-    </AuthContext.Provider>
-  );
+export function useAuth() {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth must be used inside AuthProvider");
+  return ctx;
 }
 
-export const useAuth = () => {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
-  return ctx;
-};
+// ─── Provider ─────────────────────────────────────────────────────────────────
+
+export function AuthProvider({ children }) {
+  const [user, setUser] = useState(null); // Supabase auth user
+  const [admin, setAdmin] = useState(null); // residents row for this admin
+  const [loading, setLoading] = useState(true);
+
+  // ── Resolve admin profile from a Supabase session ────────────────────────
+  // 1. Look up the user's email in the residents table.
+  // 2. Check their house_number against the admin_houses DB table.
+  // 3. If either check fails, sign them out immediately.
+
+  const resolveAdmin = useCallback(async (authUser) => {
+    if (!authUser) {
+      setUser(null);
+      setAdmin(null);
+      return;
+    }
+
+    try {
+      const resident = await getResidentByEmail(authUser.email);
+
+      if (!resident) {
+        // Email not in residents table — not allowed
+        await supabase.auth.signOut();
+        setUser(null);
+        setAdmin(null);
+        return;
+      }
+
+      // Check admin_houses table (DB-driven, not hardcoded)
+      const adminStatus = await isAdminHouse(resident.houseNumber);
+
+      if (!adminStatus) {
+        // Resident exists but their house isn't an admin house
+        await supabase.auth.signOut();
+        setUser(null);
+        setAdmin(null);
+        return;
+      }
+
+      setUser(authUser);
+      setAdmin(resident);
+    } catch (err) {
+      console.error("AuthContext: error resolving admin profile", err);
+      await supabase.auth.signOut();
+      setUser(null);
+      setAdmin(null);
+    }
+  }, []);
+
+  // ── Bootstrap: check existing session on mount ───────────────────────────
+
+  useEffect(() => {
+    let mounted = true;
+
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!mounted) return;
+      if (session?.user) {
+        await resolveAdmin(session.user);
+      }
+      setLoading(false);
+    });
+
+    // Listen for sign-in / sign-out / token-refresh events
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!mounted) return;
+
+      if (event === "SIGNED_OUT") {
+        setUser(null);
+        setAdmin(null);
+        return;
+      }
+
+      // PASSWORD_RECOVERY — don't redirect, let ResetPasswordPage handle it
+      if (event === "PASSWORD_RECOVERY") return;
+
+      if (session?.user) {
+        await resolveAdmin(session.user);
+      }
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, [resolveAdmin]);
+
+  // ── Sign out ──────────────────────────────────────────────────────────────
+
+  const signOut = useCallback(async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    setAdmin(null);
+  }, []);
+
+  // ── Context value ─────────────────────────────────────────────────────────
+
+  const value = {
+    user, // Supabase auth user object
+    admin, // residents row (camelCase) for the logged-in admin
+    loading,
+    signOut,
+    // Convenience: resolved display name
+    displayName: admin?.name ?? user?.email ?? "",
+    houseNumber: admin?.houseNumber ?? "",
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}

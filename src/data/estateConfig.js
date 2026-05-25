@@ -1,19 +1,28 @@
-// ─────────────────────────────────────────────────────────────────────────────
-//  STREAM DRIVE — ESTATE CONFIGURATION
-//  House numbers are now managed in the database via the Houses page.
-//  Only admin house assignments and the default levy are configured here.
-// ─────────────────────────────────────────────────────────────────────────────
+// data/estateConfig.js
+//
+// ADMIN_HOUSES has been migrated to the `admin_houses` Supabase table.
+// Manage admin houses from Settings → Admin Houses in the app.
+//
+// To seed your initial admin houses, run in Supabase SQL editor:
+//   insert into admin_houses (house_number) values ('A1'), ('B3');
+//
+// The isAdminHouse() helper is now in services/settingsService.js and
+// queries the DB at login time — no code changes needed when admins change.
 
 /**
- * House numbers with ADMIN privileges.
- * Update this array after each estate management election.
- * Any resident registered with one of these house numbers
- * will have full admin access.
+ * Default levy amount used only when the settings row doesn't exist yet
+ * (i.e. a brand-new installation before an admin has saved Settings).
+ * Once Settings → Levy is saved this value is ignored.
  */
-export const ADMIN_HOUSES = ["SD-01", "SD-05", "SD-10"];
+export const DEFAULT_LEVY_AMOUNT = 5000;
 
-/** Check if a house number has admin privileges */
-export const isAdminHouse = (houseNumber) => ADMIN_HOUSES.includes(houseNumber);
-
-/** Default monthly security levy in KES */
-export const DEFAULT_LEVY_AMOUNT = 3000;
+// ── Legacy export kept so any file that imports isAdminHouse from here
+// does not get a hard import error. It throws to make the misconfiguration
+// obvious rather than silently returning false.
+// Remove this once all call sites have been updated to use settingsService.
+export function isAdminHouse() {
+  throw new Error(
+    "isAdminHouse() has moved to services/settingsService.js. " +
+      "Import it from there instead.",
+  );
+}
