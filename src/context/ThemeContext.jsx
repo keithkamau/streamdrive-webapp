@@ -1,4 +1,3 @@
-// context/ThemeContext.jsx
 import { createContext, useContext, useState, useEffect } from "react";
 
 const ThemeContext = createContext(null);
@@ -25,9 +24,7 @@ export function ThemeProvider({ children }) {
   const toggleTheme = () => setDark((d) => !d);
 
   return (
-    // Expose both `dark` and `isDark` so TopBar.jsx (isDark) and any other
-    // consumer using `dark` both work without changes.
-    <ThemeContext.Provider value={{ dark, isDark: dark, toggleTheme }}>
+    <ThemeContext.Provider value={{ dark, toggleTheme }}>
       {children}
     </ThemeContext.Provider>
   );
@@ -35,6 +32,6 @@ export function ThemeProvider({ children }) {
 
 export const useTheme = () => {
   const ctx = useContext(ThemeContext);
-  if (!ctx) throw new Error("useTheme must be within ThemeProvider");
+  if (!ctx) throw new Error("useTheme must be used within ThemeProvider");
   return ctx;
 };
