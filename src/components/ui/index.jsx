@@ -1,3 +1,6 @@
+// All components are fully theme-aware: clean white/zinc in light mode,
+// proper dark surfaces in dark mode. No hardcoded dark colours.
+
 import { useState } from "react";
 
 // ── Button ────────────────────────────────────────────────────────────────────
@@ -10,18 +13,18 @@ export function Button({
   ...props
 }) {
   const base =
-    "inline-flex items-center justify-center font-semibold rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black disabled:opacity-50 disabled:cursor-not-allowed";
+    "inline-flex items-center justify-center font-semibold rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-zinc-900 disabled:opacity-50 disabled:cursor-not-allowed";
 
   const variants = {
     primary:
       "bg-green-600 hover:bg-green-500 active:bg-green-700 text-white focus:ring-green-500",
     secondary:
-      "bg-zinc-100 hover:bg-zinc-200 active:bg-zinc-300 text-zinc-900 border border-zinc-300 focus:ring-zinc-400",
+      "bg-zinc-100 hover:bg-zinc-200 active:bg-zinc-300 text-zinc-800 border border-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:text-zinc-100 dark:border-zinc-700 focus:ring-zinc-400",
     ghost:
-      "bg-transparent hover:bg-zinc-100 text-zinc-700 hover:text-zinc-900 focus:ring-zinc-400",
+      "bg-transparent hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100 focus:ring-zinc-400",
     danger: "bg-red-600 hover:bg-red-500 text-white focus:ring-red-500",
     outline:
-      "bg-transparent border border-green-600 text-green-600 hover:bg-green-600 hover:text-white focus:ring-green-500",
+      "bg-transparent border border-green-600 text-green-600 hover:bg-green-600 hover:text-white dark:border-green-500 dark:text-green-400 dark:hover:bg-green-600 dark:hover:text-white focus:ring-green-500",
   };
 
   const sizes = {
@@ -64,20 +67,25 @@ export function Input({ label, error, hint, className = "", ...props }) {
   return (
     <div className='flex flex-col gap-1.5'>
       {label && (
-        <label className='text-xs font-semibold uppercase tracking-widest text-zinc-500'>
+        <label className='text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400'>
           {label}
         </label>
       )}
       <input
-        className={`w-full bg-zinc-50 border ${
-          error ? "border-red-500" : "border-zinc-300"
-        } rounded-lg px-3.5 py-2.5 text-sm text-zinc-900 placeholder-zinc-400
+        className={`w-full bg-white dark:bg-zinc-800 border ${
+          error ? "border-red-500" : "border-zinc-300 dark:border-zinc-600"
+        } rounded-lg px-3.5 py-2.5 text-sm text-zinc-900 dark:text-zinc-100
+        placeholder-zinc-400 dark:placeholder-zinc-500
         focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent
         transition-all duration-200 ${className}`}
         {...props}
       />
-      {error && <p className='text-xs text-red-400'>{error}</p>}
-      {hint && !error && <p className='text-xs text-zinc-500'>{hint}</p>}
+      {error && (
+        <p className='text-xs text-red-500 dark:text-red-400'>{error}</p>
+      )}
+      {hint && !error && (
+        <p className='text-xs text-zinc-500 dark:text-zinc-400'>{hint}</p>
+      )}
     </div>
   );
 }
@@ -107,7 +115,7 @@ export function PasswordInput({
   };
 
   const strengthMap = [
-    { label: "", color: "bg-zinc-700" },
+    { label: "", color: "bg-zinc-300 dark:bg-zinc-600" },
     { label: "Weak", color: "bg-red-500" },
     { label: "Fair", color: "bg-yellow-500" },
     { label: "Good", color: "bg-green-400" },
@@ -117,7 +125,7 @@ export function PasswordInput({
   return (
     <div className='flex flex-col gap-1.5'>
       {label && (
-        <label className='text-xs font-semibold uppercase tracking-widest text-zinc-500'>
+        <label className='text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400'>
           {label}
         </label>
       )}
@@ -126,16 +134,17 @@ export function PasswordInput({
           {...props}
           type={show ? "text" : "password"}
           onChange={handleChange}
-          className={`w-full bg-zinc-50 border ${
-            error ? "border-red-500" : "border-zinc-300"
-          } rounded-lg px-3.5 py-2.5 pr-10 text-sm text-zinc-900 placeholder-zinc-400
+          className={`w-full bg-white dark:bg-zinc-800 border ${
+            error ? "border-red-500" : "border-zinc-300 dark:border-zinc-600"
+          } rounded-lg px-3.5 py-2.5 pr-10 text-sm text-zinc-900 dark:text-zinc-100
+          placeholder-zinc-400 dark:placeholder-zinc-500
           focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent
           transition-all duration-200`}
         />
         <button
           type='button'
           onClick={() => setShow(!show)}
-          className='absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors'
+          className='absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300 transition-colors'
           aria-label={show ? "Hide password" : "Show password"}
         >
           {show ? (
@@ -170,18 +179,24 @@ export function PasswordInput({
               <div
                 key={i}
                 className={`h-1 flex-1 rounded-full transition-all duration-300 ${
-                  i <= strength ? strengthMap[strength].color : "bg-zinc-700"
+                  i <= strength
+                    ? strengthMap[strength].color
+                    : "bg-zinc-200 dark:bg-zinc-700"
                 }`}
               />
             ))}
           </div>
-          <span className='text-xs text-zinc-400 w-12'>
+          <span className='text-xs text-zinc-400 dark:text-zinc-500 w-12'>
             {strengthMap[strength].label}
           </span>
         </div>
       )}
-      {error && <p className='text-xs text-red-400'>{error}</p>}
-      {hint && !error && <p className='text-xs text-zinc-500'>{hint}</p>}
+      {error && (
+        <p className='text-xs text-red-500 dark:text-red-400'>{error}</p>
+      )}
+      {hint && !error && (
+        <p className='text-xs text-zinc-500 dark:text-zinc-400'>{hint}</p>
+      )}
     </div>
   );
 }
@@ -199,14 +214,14 @@ export function Select({
   return (
     <div className='flex flex-col gap-1.5'>
       {label && (
-        <label className='text-xs font-semibold uppercase tracking-widest text-zinc-500'>
+        <label className='text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400'>
           {label}
         </label>
       )}
       <select
-        className={`w-full bg-zinc-50 border ${
-          error ? "border-red-500" : "border-zinc-300"
-        } rounded-lg px-3.5 py-2.5 text-sm text-zinc-900 placeholder-zinc-400
+        className={`w-full bg-white dark:bg-zinc-800 border ${
+          error ? "border-red-500" : "border-zinc-300 dark:border-zinc-600"
+        } rounded-lg px-3.5 py-2.5 text-sm text-zinc-900 dark:text-zinc-100
         focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent
         transition-all duration-200 cursor-pointer ${className}`}
         {...props}
@@ -217,30 +232,52 @@ export function Select({
           </option>
         )}
         {options.map((opt) => (
-          <option key={opt.value} value={opt.value} className='bg-zinc-900'>
+          <option key={opt.value} value={opt.value}>
             {opt.label}
           </option>
         ))}
       </select>
-      {error && <p className='text-xs text-red-400'>{error}</p>}
-      {hint && !error && <p className='text-xs text-zinc-500'>{hint}</p>}
+      {error && (
+        <p className='text-xs text-red-500 dark:text-red-400'>{error}</p>
+      )}
+      {hint && !error && (
+        <p className='text-xs text-zinc-500 dark:text-zinc-400'>{hint}</p>
+      )}
     </div>
   );
 }
 
 // ── Badge ─────────────────────────────────────────────────────────────────────
-export function Badge({ children, variant = "default", className = "" }) {
-  const variants = {
-    default: "bg-zinc-800 text-zinc-300 border border-zinc-700",
-    admin: "bg-green-900/60 text-green-300 border border-green-700",
-    paid: "bg-green-900/60 text-green-300 border border-green-700",
-    pending: "bg-yellow-900/60 text-yellow-300 border border-yellow-700",
-    overdue: "bg-red-900/60 text-red-300 border border-red-700",
-    info: "bg-blue-900/60 text-blue-300 border border-blue-700",
+// Supports both `variant` (named presets) and `color` (semantic: green/yellow/red/zinc)
+export function Badge({ children, variant, color, className = "" }) {
+  // color prop used by pages (AllPayments, Residents, Dashboard)
+  const colorMap = {
+    green:
+      "bg-green-100 text-green-700 border border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-700",
+    yellow:
+      "bg-yellow-100 text-yellow-700 border border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-700",
+    red: "bg-red-100 text-red-700 border border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700",
+    blue: "bg-blue-100 text-blue-700 border border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-700",
+    zinc: "bg-zinc-100 text-zinc-600 border border-zinc-200 dark:bg-zinc-700 dark:text-zinc-300 dark:border-zinc-600",
   };
+
+  // variant prop used by Sidebar, Houses, Announcements
+  const variantMap = {
+    default: colorMap.zinc,
+    admin: colorMap.green,
+    paid: colorMap.green,
+    pending: colorMap.yellow,
+    overdue: colorMap.red,
+    info: colorMap.blue,
+  };
+
+  const cls = color
+    ? (colorMap[color] ?? colorMap.zinc)
+    : (variantMap[variant ?? "default"] ?? variantMap.default);
+
   return (
     <span
-      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold ${variants[variant]} ${className}`}
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold ${cls} ${className}`}
     >
       {children}
     </span>
@@ -251,7 +288,7 @@ export function Badge({ children, variant = "default", className = "" }) {
 export function Card({ children, className = "", ...props }) {
   return (
     <div
-      className={`bg-white border border-zinc-200 rounded-xl ${className}`}
+      className={`bg-white dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 rounded-xl ${className}`}
       {...props}
     >
       {children}
@@ -262,11 +299,17 @@ export function Card({ children, className = "", ...props }) {
 // ── Alert ─────────────────────────────────────────────────────────────────────
 export function Alert({ children, variant = "info", className = "" }) {
   const variants = {
-    info: "bg-blue-50 border border-blue-200 text-blue-700",
-    success: "bg-green-50 border border-green-200 text-green-700",
-    warning: "bg-yellow-50 border border-yellow-200 text-yellow-700",
-    danger: "bg-red-50 border border-red-200 text-red-700",
+    info: "bg-blue-50 border border-blue-200 text-blue-700 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-300",
+    success:
+      "bg-green-50 border border-green-200 text-green-700 dark:bg-green-900/20 dark:border-green-800 dark:text-green-300",
+    warning:
+      "bg-yellow-50 border border-yellow-200 text-yellow-700 dark:bg-yellow-900/20 dark:border-yellow-800 dark:text-yellow-300",
+    danger:
+      "bg-red-50 border border-red-200 text-red-700 dark:bg-red-900/20 dark:border-red-800 dark:text-red-300",
+    error:
+      "bg-red-50 border border-red-200 text-red-700 dark:bg-red-900/20 dark:border-red-800 dark:text-red-300",
   };
+
   const icons = {
     info: (
       <svg
@@ -319,12 +362,26 @@ export function Alert({ children, variant = "info", className = "" }) {
         <line x1='9' y1='9' x2='15' y2='15' />
       </svg>
     ),
+    error: (
+      <svg
+        className='w-4 h-4 shrink-0 mt-0.5'
+        fill='none'
+        stroke='currentColor'
+        strokeWidth='2'
+        viewBox='0 0 24 24'
+      >
+        <circle cx='12' cy='12' r='10' />
+        <line x1='15' y1='9' x2='9' y2='15' />
+        <line x1='9' y1='9' x2='15' y2='15' />
+      </svg>
+    ),
   };
+
   return (
     <div
-      className={`flex gap-2.5 items-start p-3.5 rounded-lg border text-sm ${variants[variant]} ${className}`}
+      className={`flex gap-2.5 items-start p-3.5 rounded-lg text-sm ${variants[variant] ?? variants.info} ${className}`}
     >
-      {icons[variant]}
+      {icons[variant] ?? icons.info}
       <div>{children}</div>
     </div>
   );
@@ -360,13 +417,13 @@ export function Spinner({ size = "md" }) {
 export function Divider({ label }) {
   return (
     <div className='flex items-center gap-3 my-2'>
-      <div className='flex-1 h-px bg-zinc-800' />
+      <div className='flex-1 h-px bg-zinc-200 dark:bg-zinc-700' />
       {label && (
-        <span className='text-xs text-zinc-600 uppercase tracking-widest'>
+        <span className='text-xs text-zinc-400 dark:text-zinc-500 uppercase tracking-widest'>
           {label}
         </span>
       )}
-      <div className='flex-1 h-px bg-zinc-800' />
+      <div className='flex-1 h-px bg-zinc-200 dark:bg-zinc-700' />
     </div>
   );
 }

@@ -1,3 +1,4 @@
+// services/notifications.js
 // Email notification helpers — called by AllPayments, Residents, etc.
 // Sends emails via the Supabase Edge Function "send-email" (Resend API).
 

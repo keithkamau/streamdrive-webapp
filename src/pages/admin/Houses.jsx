@@ -1,3 +1,4 @@
+// pages/admin/Houses.jsx
 import { useState, useEffect, useCallback } from "react";
 import { Card, Button, Badge, Alert } from "../../components/ui";
 import {
@@ -6,11 +7,12 @@ import {
   deleteHouse,
   isHouseOccupied,
 } from "../../services/houseService";
+import { getAdminHouses } from "../../services/settingsService";
 import { useRealtime } from "../../hooks/useRealtime";
-import { isAdminHouse } from "../../data/estateConfig";
 
 export default function Houses() {
   const [houses, setHouses] = useState([]);
+  const [adminHouses, setAdminHouses] = useState(new Set());
   const [loading, setLoading] = useState(true);
   const [input, setInput] = useState("");
   const [adding, setAdding] = useState(false);
@@ -22,8 +24,12 @@ export default function Houses() {
 
   const reload = useCallback(async () => {
     try {
-      const data = await getHouses();
+      const [data, adminList] = await Promise.all([
+        getHouses(),
+        getAdminHouses(),
+      ]);
       setHouses(data);
+      setAdminHouses(new Set(adminList));
     } catch (err) {
       setError("Failed to load house numbers.");
       console.error(err);
@@ -35,6 +41,7 @@ export default function Houses() {
   useEffect(() => {
     reload();
   }, [reload]);
+
   useRealtime(
     "houses",
     useCallback(() => reload(), [reload]),
@@ -53,7 +60,6 @@ export default function Houses() {
       setError("Please enter a house number.");
       return;
     }
-
     setAdding(true);
     try {
       await addHouse(value);
@@ -94,9 +100,8 @@ export default function Houses() {
     h.houseNumber.toLowerCase().includes(search.toLowerCase()),
   );
 
-  const occupied = houses.filter((h) =>
-    /* We don't track occupation here but admins can see admin houses */
-    isAdminHouse(h.houseNumber),
+  const adminCount = houses.filter((h) =>
+    adminHouses.has(h.houseNumber),
   ).length;
 
   if (loading) {
@@ -202,7 +207,7 @@ export default function Houses() {
             Admin Houses
           </p>
           <p className='font-display font-bold text-2xl text-green-600'>
-            {occupied}
+            {adminCount}
           </p>
           <p className='text-xs text-zinc-400'>with admin access</p>
         </Card>
@@ -211,7 +216,7 @@ export default function Houses() {
             Available
           </p>
           <p className='font-display font-bold text-2xl text-zinc-900'>
-            {houses.length - occupied}
+            {houses.length - adminCount}
           </p>
           <p className='text-xs text-zinc-400'>non-admin houses</p>
         </Card>
@@ -276,7 +281,7 @@ export default function Houses() {
         ) : (
           <div className='divide-y divide-zinc-100'>
             {filtered.map((house) => {
-              const isAdmin = isAdminHouse(house.houseNumber);
+              const isAdmin = adminHouses.has(house.houseNumber);
               return (
                 <div
                   key={house.id}
@@ -351,11 +356,11 @@ export default function Houses() {
                 {deleteConfirm.houseNumber}
               </span>{" "}
               from the estate? This cannot be undone.
-              {isAdminHouse(deleteConfirm.houseNumber) && (
+              {adminHouses.has(deleteConfirm.houseNumber) && (
                 <span className='block mt-2 text-yellow-700 bg-yellow-50 border border-yellow-200 rounded-lg p-2.5 text-xs'>
-                  Warning — this is an admin house. Removing it will not revoke
-                  admin access until the admin list in estateConfig.js is also
-                  updated.
+                  Warning — this is an admin house. Removing it here will not
+                  revoke admin access until it is also removed from Settings →
+                  Admin Houses.
                 </span>
               )}
             </p>
