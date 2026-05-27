@@ -1,6 +1,3 @@
-// All components are fully theme-aware: clean white/zinc in light mode,
-// proper dark surfaces in dark mode. No hardcoded dark colours.
-
 import { useState } from "react";
 
 // ── Button ────────────────────────────────────────────────────────────────────
@@ -19,7 +16,7 @@ export function Button({
     primary:
       "bg-green-600 hover:bg-green-500 active:bg-green-700 text-white focus:ring-green-500",
     secondary:
-      "bg-zinc-100 hover:bg-zinc-200 active:bg-zinc-300 text-zinc-800 border border-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:text-zinc-100 dark:border-zinc-700 focus:ring-zinc-400",
+      "bg-zinc-100 hover:bg-zinc-200 active:bg-zinc-300 text-zinc-900 border border-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:text-zinc-100 dark:border-zinc-700 focus:ring-zinc-400",
     ghost:
       "bg-transparent hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100 focus:ring-zinc-400",
     danger: "bg-red-600 hover:bg-red-500 text-white focus:ring-red-500",
@@ -74,15 +71,12 @@ export function Input({ label, error, hint, className = "", ...props }) {
       <input
         className={`w-full bg-white dark:bg-zinc-800 border ${
           error ? "border-red-500" : "border-zinc-300 dark:border-zinc-600"
-        } rounded-lg px-3.5 py-2.5 text-sm text-zinc-900 dark:text-zinc-100
-        placeholder-zinc-400 dark:placeholder-zinc-500
+        } rounded-lg px-3.5 py-2.5 text-sm text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500
         focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent
         transition-all duration-200 ${className}`}
         {...props}
       />
-      {error && (
-        <p className='text-xs text-red-500 dark:text-red-400'>{error}</p>
-      )}
+      {error && <p className='text-xs text-red-400'>{error}</p>}
       {hint && !error && (
         <p className='text-xs text-zinc-500 dark:text-zinc-400'>{hint}</p>
       )}
@@ -136,15 +130,14 @@ export function PasswordInput({
           onChange={handleChange}
           className={`w-full bg-white dark:bg-zinc-800 border ${
             error ? "border-red-500" : "border-zinc-300 dark:border-zinc-600"
-          } rounded-lg px-3.5 py-2.5 pr-10 text-sm text-zinc-900 dark:text-zinc-100
-          placeholder-zinc-400 dark:placeholder-zinc-500
+          } rounded-lg px-3.5 py-2.5 pr-10 text-sm text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500
           focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent
           transition-all duration-200`}
         />
         <button
           type='button'
           onClick={() => setShow(!show)}
-          className='absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300 transition-colors'
+          className='absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors'
           aria-label={show ? "Hide password" : "Show password"}
         >
           {show ? (
@@ -181,7 +174,7 @@ export function PasswordInput({
                 className={`h-1 flex-1 rounded-full transition-all duration-300 ${
                   i <= strength
                     ? strengthMap[strength].color
-                    : "bg-zinc-200 dark:bg-zinc-700"
+                    : "bg-zinc-200 dark:bg-zinc-600"
                 }`}
               />
             ))}
@@ -191,9 +184,7 @@ export function PasswordInput({
           </span>
         </div>
       )}
-      {error && (
-        <p className='text-xs text-red-500 dark:text-red-400'>{error}</p>
-      )}
+      {error && <p className='text-xs text-red-400'>{error}</p>}
       {hint && !error && (
         <p className='text-xs text-zinc-500 dark:text-zinc-400'>{hint}</p>
       )}
@@ -237,9 +228,7 @@ export function Select({
           </option>
         ))}
       </select>
-      {error && (
-        <p className='text-xs text-red-500 dark:text-red-400'>{error}</p>
-      )}
+      {error && <p className='text-xs text-red-400'>{error}</p>}
       {hint && !error && (
         <p className='text-xs text-zinc-500 dark:text-zinc-400'>{hint}</p>
       )}
@@ -248,20 +237,20 @@ export function Select({
 }
 
 // ── Badge ─────────────────────────────────────────────────────────────────────
-// Supports both `variant` (named presets) and `color` (semantic: green/yellow/red/zinc)
+// Supports both `variant` (named) and `color` (semantic: green/yellow/red/blue/zinc)
 export function Badge({ children, variant, color, className = "" }) {
-  // color prop used by pages (AllPayments, Residents, Dashboard)
+  // color prop → used by payment status cells
   const colorMap = {
     green:
-      "bg-green-100 text-green-700 border border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-700",
+      "bg-green-100  text-green-700  border border-green-200  dark:bg-green-900/30 dark:text-green-300  dark:border-green-700",
     yellow:
       "bg-yellow-100 text-yellow-700 border border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-700",
-    red: "bg-red-100 text-red-700 border border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-700",
-    blue: "bg-blue-100 text-blue-700 border border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-700",
-    zinc: "bg-zinc-100 text-zinc-600 border border-zinc-200 dark:bg-zinc-700 dark:text-zinc-300 dark:border-zinc-600",
+    red: "bg-red-100    text-red-700    border border-red-200    dark:bg-red-900/30    dark:text-red-300    dark:border-red-700",
+    blue: "bg-blue-100   text-blue-700   border border-blue-200   dark:bg-blue-900/30   dark:text-blue-300   dark:border-blue-700",
+    zinc: "bg-zinc-100   text-zinc-600   border border-zinc-200   dark:bg-zinc-700      dark:text-zinc-300   dark:border-zinc-600",
   };
 
-  // variant prop used by Sidebar, Houses, Announcements
+  // variant prop → used by named semantic badges
   const variantMap = {
     default: colorMap.zinc,
     admin: colorMap.green,
@@ -271,9 +260,7 @@ export function Badge({ children, variant, color, className = "" }) {
     info: colorMap.blue,
   };
 
-  const cls = color
-    ? (colorMap[color] ?? colorMap.zinc)
-    : (variantMap[variant ?? "default"] ?? variantMap.default);
+  const cls = color ? colorMap[color] : variantMap[variant ?? "default"];
 
   return (
     <span
@@ -288,7 +275,7 @@ export function Badge({ children, variant, color, className = "" }) {
 export function Card({ children, className = "", ...props }) {
   return (
     <div
-      className={`bg-white dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 rounded-xl ${className}`}
+      className={`bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl ${className}`}
       {...props}
     >
       {children}
@@ -299,15 +286,15 @@ export function Card({ children, className = "", ...props }) {
 // ── Alert ─────────────────────────────────────────────────────────────────────
 export function Alert({ children, variant = "info", className = "" }) {
   const variants = {
-    info: "bg-blue-50 border border-blue-200 text-blue-700 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-300",
+    info: "bg-blue-50   dark:bg-blue-900/20  border border-blue-200   dark:border-blue-800   text-blue-700   dark:text-blue-300",
     success:
-      "bg-green-50 border border-green-200 text-green-700 dark:bg-green-900/20 dark:border-green-800 dark:text-green-300",
+      "bg-green-50  dark:bg-green-900/20 border border-green-200  dark:border-green-800  text-green-700  dark:text-green-300",
     warning:
-      "bg-yellow-50 border border-yellow-200 text-yellow-700 dark:bg-yellow-900/20 dark:border-yellow-800 dark:text-yellow-300",
+      "bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 text-yellow-700 dark:text-yellow-300",
     danger:
-      "bg-red-50 border border-red-200 text-red-700 dark:bg-red-900/20 dark:border-red-800 dark:text-red-300",
+      "bg-red-50    dark:bg-red-900/20   border border-red-200    dark:border-red-800    text-red-700    dark:text-red-300",
     error:
-      "bg-red-50 border border-red-200 text-red-700 dark:bg-red-900/20 dark:border-red-800 dark:text-red-300",
+      "bg-red-50    dark:bg-red-900/20   border border-red-200    dark:border-red-800    text-red-700    dark:text-red-300",
   };
 
   const icons = {

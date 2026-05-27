@@ -28,11 +28,9 @@ function relativeTime(isoString) {
 
 const TYPE_META = {
   paid: { icon: "✅", color: "text-green-600 dark:text-green-400" },
-  overdue: { icon: "⚠️", color: "text-red-500  dark:text-red-400" },
+  overdue: { icon: "⚠️", color: "text-red-500 dark:text-red-400" },
   announcement: { icon: "📢", color: "text-blue-500 dark:text-blue-400" },
 };
-
-// ─── Page title map ───────────────────────────────────────────────────────────
 
 const PAGE_TITLES = {
   dashboard: "Dashboard",
@@ -46,9 +44,9 @@ const PAGE_TITLES = {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function TopBar({ currentPage, setCurrentPage }) {
+export default function TopBar({ currentPage, onNavigate, onMenuClick }) {
   const { signOut, displayName } = useAuth();
-  const { isDark, toggleTheme } = useTheme();
+  const { dark, toggleTheme } = useTheme();
 
   const [notifications, setNotifications] = useState([]);
   const [bellOpen, setBellOpen] = useState(false);
@@ -67,45 +65,40 @@ export default function TopBar({ currentPage, setCurrentPage }) {
       const data = await getRecentNotifications();
       setNotifications(data);
     } catch {
-      // Bell failures are non-critical — fail silently
+      // non-critical — fail silently
     } finally {
       setBellLoading(false);
     }
   }, []);
 
-  // Load on mount; refresh every 2 minutes
   useEffect(() => {
     loadNotifications();
     const interval = setInterval(loadNotifications, 2 * 60 * 1000);
     return () => clearInterval(interval);
   }, [loadNotifications]);
 
-  // ── Close dropdown on outside click ──────────────────────────────────────
+  // ── Close on outside click ────────────────────────────────────────────────
 
   useEffect(() => {
     if (!bellOpen) return;
-
     const handler = (e) => {
       if (
         bellRef.current &&
         !bellRef.current.contains(e.target) &&
         dropdownRef.current &&
         !dropdownRef.current.contains(e.target)
-      ) {
+      )
         setBellOpen(false);
-      }
     };
-
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [bellOpen]);
 
-  // ── Bell click — open and mark all read ──────────────────────────────────
+  // ── Bell handlers ─────────────────────────────────────────────────────────
 
   const handleBellClick = () => {
     if (!bellOpen) {
       setBellOpen(true);
-      // Optimistically mark all as read in state + localStorage
       const updated = notifications.map((n) => ({ ...n, read: true }));
       setNotifications(updated);
       markAllRead(updated);
@@ -114,18 +107,13 @@ export default function TopBar({ currentPage, setCurrentPage }) {
     }
   };
 
-  // ── Navigate to relevant page from a notification ────────────────────────
-
   const handleNotificationClick = (n) => {
     markOneRead(n.id);
     setBellOpen(false);
-
     if (n.type === "paid" || n.type === "overdue") {
-      setCurrentPage("admin-payments");
-      window.location.hash = "#admin-payments";
+      onNavigate?.("admin-payments");
     } else if (n.type === "announcement") {
-      setCurrentPage("announcements");
-      window.location.hash = "#announcements";
+      onNavigate?.("announcements");
     }
   };
 
@@ -134,11 +122,30 @@ export default function TopBar({ currentPage, setCurrentPage }) {
   const pageTitle = PAGE_TITLES[currentPage] ?? "Dashboard";
 
   return (
-    <header className='h-14 flex items-center justify-between px-4 sm:px-6 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shrink-0'>
-      {/* Page title */}
-      <h2 className='text-base font-display font-semibold text-zinc-800 dark:text-zinc-100 truncate'>
-        {pageTitle}
-      </h2>
+    <header className='h-14 flex items-center justify-between px-4 sm:px-6 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shrink-0 transition-colors duration-200'>
+      {/* Left: hamburger (mobile) + page title */}
+      <div className='flex items-center gap-3'>
+        <button
+          onClick={onMenuClick}
+          className='lg:hidden w-9 h-9 flex items-center justify-center rounded-lg text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors'
+          aria-label='Open menu'
+        >
+          <svg
+            className='w-5 h-5'
+            fill='none'
+            stroke='currentColor'
+            strokeWidth='2'
+            viewBox='0 0 24 24'
+          >
+            <line x1='3' y1='6' x2='21' y2='6' />
+            <line x1='3' y1='12' x2='21' y2='12' />
+            <line x1='3' y1='18' x2='21' y2='18' />
+          </svg>
+        </button>
+        <h2 className='text-base font-display font-semibold text-zinc-800 dark:text-zinc-100 truncate'>
+          {pageTitle}
+        </h2>
+      </div>
 
       {/* Right controls */}
       <div className='flex items-center gap-1'>
@@ -146,22 +153,50 @@ export default function TopBar({ currentPage, setCurrentPage }) {
         <button
           onClick={toggleTheme}
           className='w-9 h-9 flex items-center justify-center rounded-lg text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors'
-          aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-          title={isDark ? "Light mode" : "Dark mode"}
+          aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
+          title={dark ? "Light mode" : "Dark mode"}
         >
-          {isDark ? "☀️" : "🌙"}
+          {dark ? (
+            // Sun — shown in dark mode
+            <svg
+              className='w-5 h-5'
+              fill='none'
+              stroke='currentColor'
+              strokeWidth='2'
+              viewBox='0 0 24 24'
+            >
+              <circle cx='12' cy='12' r='5' />
+              <line x1='12' y1='1' x2='12' y2='3' />
+              <line x1='12' y1='21' x2='12' y2='23' />
+              <line x1='4.22' y1='4.22' x2='5.64' y2='5.64' />
+              <line x1='18.36' y1='18.36' x2='19.78' y2='19.78' />
+              <line x1='1' y1='12' x2='3' y2='12' />
+              <line x1='21' y1='12' x2='23' y2='12' />
+              <line x1='4.22' y1='19.78' x2='5.64' y2='18.36' />
+              <line x1='18.36' y1='5.64' x2='19.78' y2='4.22' />
+            </svg>
+          ) : (
+            // Moon — shown in light mode
+            <svg
+              className='w-5 h-5'
+              fill='none'
+              stroke='currentColor'
+              strokeWidth='2'
+              viewBox='0 0 24 24'
+            >
+              <path d='M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z' />
+            </svg>
+          )}
         </button>
 
-        {/* ── Notification bell ── */}
+        {/* Notification bell */}
         <div className='relative'>
           <button
             ref={bellRef}
             onClick={handleBellClick}
             className='w-9 h-9 flex items-center justify-center rounded-lg text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors relative'
             aria-label='Notifications'
-            title='Notifications'
           >
-            {/* Bell icon */}
             <svg
               className='w-5 h-5'
               fill='none'
@@ -175,35 +210,30 @@ export default function TopBar({ currentPage, setCurrentPage }) {
                 d='M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0'
               />
             </svg>
-
-            {/* Unread badge */}
             {unreadCount > 0 && (
               <span className='absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-green-500 ring-2 ring-white dark:ring-zinc-900' />
             )}
           </button>
 
-          {/* ── Dropdown panel ── */}
+          {/* Dropdown */}
           {bellOpen && (
             <div
               ref={dropdownRef}
               className='absolute right-0 top-11 w-80 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-xl z-50 overflow-hidden animate-fade-in'
             >
-              {/* Header */}
               <div className='flex items-center justify-between px-4 py-3 border-b border-zinc-100 dark:border-zinc-800'>
                 <span className='text-sm font-semibold text-zinc-800 dark:text-zinc-100'>
                   Recent Activity
                 </span>
                 <button
                   onClick={loadNotifications}
-                  className='text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors'
-                  title='Refresh'
                   disabled={bellLoading}
+                  className='text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors'
                 >
                   {bellLoading ? "…" : "↻"}
                 </button>
               </div>
 
-              {/* List */}
               <div className='max-h-80 overflow-y-auto'>
                 {bellLoading && notifications.length === 0 ? (
                   <div className='py-8 text-center text-sm text-zinc-400'>
@@ -212,7 +242,9 @@ export default function TopBar({ currentPage, setCurrentPage }) {
                 ) : notifications.length === 0 ? (
                   <div className='py-8 text-center'>
                     <p className='text-2xl mb-2'>🔔</p>
-                    <p className='text-sm text-zinc-400'>No recent activity</p>
+                    <p className='text-sm text-zinc-400 dark:text-zinc-500'>
+                      No recent activity
+                    </p>
                   </div>
                 ) : (
                   <ul>
@@ -222,16 +254,11 @@ export default function TopBar({ currentPage, setCurrentPage }) {
                         <li key={n.id}>
                           <button
                             onClick={() => handleNotificationClick(n)}
-                            className={`w-full text-left px-4 py-3 flex gap-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/60 transition-colors border-b border-zinc-50 dark:border-zinc-800/50 last:border-0 ${
-                              n.read ? "opacity-60" : ""
-                            }`}
+                            className={`w-full text-left px-4 py-3 flex gap-3 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors border-b border-zinc-50 dark:border-zinc-800/50 last:border-0 ${n.read ? "opacity-50" : ""}`}
                           >
-                            {/* Icon */}
                             <span className='text-base mt-0.5 shrink-0'>
                               {meta.icon}
                             </span>
-
-                            {/* Content */}
                             <div className='flex-1 min-w-0'>
                               <p
                                 className={`text-sm font-medium truncate ${meta.color}`}
@@ -242,8 +269,6 @@ export default function TopBar({ currentPage, setCurrentPage }) {
                                 {n.body}
                               </p>
                             </div>
-
-                            {/* Time */}
                             <span className='text-xs text-zinc-400 dark:text-zinc-500 shrink-0 mt-0.5'>
                               {relativeTime(n.timestamp)}
                             </span>
@@ -255,13 +280,11 @@ export default function TopBar({ currentPage, setCurrentPage }) {
                 )}
               </div>
 
-              {/* Footer */}
               {notifications.length > 0 && (
-                <div className='px-4 py-2.5 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/40'>
+                <div className='px-4 py-2.5 border-t border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50'>
                   <button
                     onClick={() => {
-                      setCurrentPage("admin-payments");
-                      window.location.hash = "#admin-payments";
+                      onNavigate?.("admin-payments");
                       setBellOpen(false);
                     }}
                     className='text-xs text-green-600 dark:text-green-400 hover:underline font-medium'
@@ -277,7 +300,7 @@ export default function TopBar({ currentPage, setCurrentPage }) {
         {/* Sign out */}
         <button
           onClick={signOut}
-          className='ml-1 px-3 py-1.5 text-sm font-medium text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors'
+          className='ml-1 px-3 py-1.5 text-sm font-medium text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors'
           title={`Sign out (${displayName})`}
         >
           Sign out
