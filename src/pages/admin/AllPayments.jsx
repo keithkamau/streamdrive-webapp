@@ -24,6 +24,7 @@ import {
 } from "../../services/exportService";
 import { getSettings } from "../../services/settingsService";
 import { useRealtime } from "../../hooks/useRealtime";
+import { useAuth } from "../../context/AuthContext";
 import { Button, Badge, Card, Spinner, Alert } from "../../components/ui/index";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -39,6 +40,8 @@ const STATUS_META = {
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function AllPayments() {
+  const { user } = useAuth();
+
   const [viewMonth, setViewMonth] = useState(getCurrentMonth);
   const [viewYear, setViewYear] = useState(getCurrentYear);
 
@@ -131,6 +134,7 @@ export default function AllPayments() {
       setSaving(true);
       const amount = currentPayment?.amount ?? 0;
 
+      // FIX: loggedBy must be a UUID (the admin's resident id), not a house number
       const updated = await upsertPayment({
         residentId: resident.id,
         houseNumber: resident.houseNumber,
@@ -139,7 +143,7 @@ export default function AllPayments() {
         status: nextStatus,
         amount,
         datePaid: nextStatus === "paid" ? new Date().toISOString() : null,
-        loggedBy: resident.houseNumber,
+        loggedBy: user?.id ?? null,
       });
 
       await updateResident(resident.id, {
@@ -164,7 +168,7 @@ export default function AllPayments() {
     }
   };
 
-  // ── Bulk reminder — correct email type per status ─────────────────────────
+  // ── Bulk reminder ─────────────────────────────────────────────────────────
 
   const handleBulkReminder = async () => {
     try {
@@ -289,7 +293,6 @@ export default function AllPayments() {
               )}
             </Button>
           )}
-
           <Button
             variant='secondary'
             onClick={handleExportCSV}
@@ -298,7 +301,6 @@ export default function AllPayments() {
           >
             ↓ CSV
           </Button>
-
           <Button
             variant='secondary'
             onClick={handleExportPDF}
