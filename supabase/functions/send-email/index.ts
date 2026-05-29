@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const FROM_EMAIL =
-  Deno.env.get("FROM_EMAIL") ?? "Stream Drive Estate <onboarding@resend.dev>";
+  Deno.env.get("FROM_EMAIL") || "Stream Drive Estate <onboarding@resend.dev>";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
