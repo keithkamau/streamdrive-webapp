@@ -1,4 +1,4 @@
-import { supabase } from "../lib/supabaseClient";
+import { supabase } from "../lib/supabase";
 
 /**
  * Internal send — calls the Edge Function and throws on any non-2xx,

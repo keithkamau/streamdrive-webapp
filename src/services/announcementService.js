@@ -94,3 +94,26 @@ export async function deleteAnnouncement(id) {
 
   if (error) throw error;
 }
+
+export async function deleteComment({
+  announcementId,
+  text,
+  postedBy,
+  houseNumber,
+  isAdmin,
+}) {
+  const { data, error } = await supabase
+    .from("comments")
+    .delete()
+    .eq("announcement_id", announcementId)
+    .eq("text", text)
+    .eq("posted_by", postedBy)
+    .eq("house_number", houseNumber)
+    .eq("is_admin", isAdmin)
+
+    .select()
+    .single();
+
+  if (error) throw error;
+  return mapComment(data);
+}
