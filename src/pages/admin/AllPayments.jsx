@@ -1,4 +1,3 @@
-// pages/admin/AllPayments.jsx
 import { useState, useEffect, useCallback } from "react";
 import {
   getCurrentMonth,
@@ -25,9 +24,10 @@ import {
 import { getSettings } from "../../services/settingsService";
 import { useRealtime } from "../../hooks/useRealtime";
 import { useAuth } from "../../context/AuthContext";
+import { useRateLimit } from "../../hooks/useRateLimit";
 import { Button, Badge, Card, Spinner, Alert } from "../../components/ui/index";
 
-// ─── Constants ───────────────────────────────────────────────────────────────
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const STATUS_CYCLE = { pending: "paid", paid: "overdue", overdue: "pending" };
 
@@ -37,10 +37,14 @@ const STATUS_META = {
   overdue: { label: "Overdue", color: "red" },
 };
 
-// ─── Component ───────────────────────────────────────────────────────────────
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export default function AllPayments() {
   const { user } = useAuth();
+  const { guard, blocked, cooldownMessage } = useRateLimit({
+    maxCalls: 3,
+    windowMs: 60_000,
+  });
 
   const [viewMonth, setViewMonth] = useState(getCurrentMonth);
   const [viewYear, setViewYear] = useState(getCurrentYear);
@@ -134,7 +138,6 @@ export default function AllPayments() {
       setSaving(true);
       const amount = currentPayment?.amount ?? 0;
 
-      // FIX: loggedBy must be a UUID (the admin's resident id), not a house number
       const updated = await upsertPayment({
         residentId: resident.id,
         houseNumber: resident.houseNumber,
@@ -170,46 +173,53 @@ export default function AllPayments() {
 
   // ── Bulk reminder ─────────────────────────────────────────────────────────
 
-  const handleBulkReminder = async () => {
-    try {
-      setBulkSending(true);
-      setBulkResult(null);
+  async function handleBulkReminder() {
+    await guard(async () => {
+      try {
+        setBulkSending(true);
+        setBulkResult(null);
 
-      const targets = residents.filter((r) => {
-        const status = paymentMap[r.houseNumber]?.status ?? "pending";
-        return status === "pending" || status === "overdue";
-      });
+        const targets = residents.filter((r) => {
+          const status = paymentMap[r.houseNumber]?.status ?? "pending";
+          return status === "pending" || status === "overdue";
+        });
 
-      let sent = 0;
-      let failed = 0;
+        let sent = 0,
+          failed = 0;
 
-      for (const r of targets) {
-        try {
-          const p = paymentMap[r.houseNumber];
-          const status = p?.status ?? "pending";
-          if (status === "overdue") {
-            await sendOverdueNotice(r, p ?? { amount: 0 }, viewMonth, viewYear);
-          } else {
-            await sendPaymentReminder(
-              r,
-              p ?? { amount: 0 },
-              viewMonth,
-              viewYear,
-            );
+        for (const r of targets) {
+          try {
+            const p = paymentMap[r.houseNumber];
+            const status = p?.status ?? "pending";
+            if (status === "overdue") {
+              await sendOverdueNotice(
+                r,
+                p ?? { amount: 0 },
+                viewMonth,
+                viewYear,
+              );
+            } else {
+              await sendPaymentReminder(
+                r,
+                p ?? { amount: 0 },
+                viewMonth,
+                viewYear,
+              );
+            }
+            sent++;
+          } catch {
+            failed++;
           }
-          sent++;
-        } catch {
-          failed++;
         }
-      }
 
-      setBulkResult({ sent, failed });
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBulkSending(false);
-    }
-  };
+        setBulkResult({ sent, failed });
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setBulkSending(false);
+      }
+    });
+  }
 
   // ── Export ────────────────────────────────────────────────────────────────
 
@@ -284,7 +294,7 @@ export default function AllPayments() {
             <Button
               variant='outline'
               onClick={handleBulkReminder}
-              disabled={bulkSending}
+              disabled={bulkSending || blocked}
             >
               {bulkSending ? (
                 <Spinner size='sm' />
@@ -312,10 +322,24 @@ export default function AllPayments() {
         </div>
       </div>
 
-      {error && <Alert variant='error'>{error}</Alert>}
+      {/* Rate limit warning */}
+      {cooldownMessage && (
+        <Alert variant='warning' onDismiss={() => {}}>
+          {cooldownMessage}
+        </Alert>
+      )}
+
+      {error && (
+        <Alert variant='error' onDismiss={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
 
       {bulkResult && (
-        <Alert variant={bulkResult.failed > 0 ? "warning" : "success"}>
+        <Alert
+          variant={bulkResult.failed > 0 ? "warning" : "success"}
+          onDismiss={() => setBulkResult(null)}
+        >
           Sent {bulkResult.sent} reminder{bulkResult.sent !== 1 ? "s" : ""}.
           {bulkResult.failed > 0 && ` ${bulkResult.failed} failed.`}
         </Alert>
