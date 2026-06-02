@@ -1,5 +1,14 @@
 import { supabase } from "../lib/supabase";
 
+// ─── Sanitisation helper ──────────────────────────────────────────────────────
+// Trims whitespace and strips any null bytes that could cause DB issues.
+function sanitise(str) {
+  if (typeof str !== "string") return str;
+  return str.trim().replace(/\0/g, "");
+}
+
+// ─── Mappers ──────────────────────────────────────────────────────────────────
+
 function mapAnnouncement(row) {
   return {
     id: row.id,
@@ -24,20 +33,38 @@ function mapComment(row) {
   };
 }
 
+// ─── Queries ──────────────────────────────────────────────────────────────────
+
 export async function getAnnouncements() {
   const { data, error } = await supabase
     .from("announcements")
     .select(
       `
-      *,
-      comments (*)
+      id,
+      title,
+      body,
+      posted_by,
+      house_number,
+      is_admin,
+      created_at,
+      comments (
+        id,
+        text,
+        posted_by,
+        house_number,
+        is_admin,
+        created_at
+      )
     `,
     )
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .order("created_at", { ascending: true, referencedTable: "comments" });
 
   if (error) throw error;
   return data.map(mapAnnouncement);
 }
+
+// ─── Mutations ────────────────────────────────────────────────────────────────
 
 export async function addAnnouncement({
   title,
@@ -46,18 +73,29 @@ export async function addAnnouncement({
   houseNumber,
   isAdmin,
 }) {
+  // Input validation
+  const cleanTitle = sanitise(title);
+  const cleanBody = sanitise(body);
+
+  if (!cleanTitle) throw new Error("Title is required.");
+  if (cleanTitle.length > 200)
+    throw new Error("Title must be 200 characters or fewer.");
+  if (!cleanBody) throw new Error("Body is required.");
+  if (cleanBody.length > 5000)
+    throw new Error("Body must be 5 000 characters or fewer.");
+
   const { data, error } = await supabase
     .from("announcements")
     .insert([
       {
-        title,
-        body,
-        posted_by: postedBy,
-        house_number: houseNumber,
-        is_admin: isAdmin,
+        title: cleanTitle,
+        body: cleanBody,
+        posted_by: sanitise(postedBy),
+        house_number: sanitise(houseNumber),
+        is_admin: Boolean(isAdmin),
       },
     ])
-    .select()
+    .select("id, title, body, posted_by, house_number, is_admin, created_at")
     .single();
 
   if (error) throw error;
@@ -71,18 +109,25 @@ export async function addComment({
   houseNumber,
   isAdmin,
 }) {
+  // Input validation
+  if (!announcementId) throw new Error("Announcement ID is required.");
+  const cleanText = sanitise(text);
+  if (!cleanText) throw new Error("Comment text is required.");
+  if (cleanText.length > 1000)
+    throw new Error("Comment must be 1 000 characters or fewer.");
+
   const { data, error } = await supabase
     .from("comments")
     .insert([
       {
         announcement_id: announcementId,
-        text,
-        posted_by: postedBy,
-        house_number: houseNumber,
-        is_admin: isAdmin,
+        text: cleanText,
+        posted_by: sanitise(postedBy),
+        house_number: sanitise(houseNumber),
+        is_admin: Boolean(isAdmin),
       },
     ])
-    .select()
+    .select("id, text, posted_by, house_number, is_admin, created_at")
     .single();
 
   if (error) throw error;
@@ -90,30 +135,24 @@ export async function addComment({
 }
 
 export async function deleteAnnouncement(id) {
+  if (!id) throw new Error("Announcement ID is required.");
+
   const { error } = await supabase.from("announcements").delete().eq("id", id);
 
   if (error) throw error;
 }
 
-export async function deleteComment({
-  announcementId,
-  text,
-  postedBy,
-  houseNumber,
-  isAdmin,
-}) {
-  const { data, error } = await supabase
+// ─── deleteComment ────────────────────────────────────────────────────────────
+// Deletes a single comment by its primary-key UUID.
+// The RLS policy on the `comments` table should ensure only the owner
+// or an admin can delete.
+export async function deleteComment(commentId) {
+  if (!commentId) throw new Error("Comment ID is required.");
+
+  const { error } = await supabase
     .from("comments")
     .delete()
-    .eq("announcement_id", announcementId)
-    .eq("text", text)
-    .eq("posted_by", postedBy)
-    .eq("house_number", houseNumber)
-    .eq("is_admin", isAdmin)
-
-    .select()
-    .single();
+    .eq("id", commentId);
 
   if (error) throw error;
-  return mapComment(data);
 }

@@ -1,6 +1,8 @@
 import { StrictMode, Component } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
+import { AuthProvider } from "./context/AuthContext";
+import { ThemeProvider } from "./context/ThemeContext";
 import "./index.css";
 
 // ── Global error boundary ─────────────────────────────────────────────────────
@@ -113,7 +115,16 @@ class ErrorBoundary extends Component {
 createRoot(document.getElementById("root")).render(
   <StrictMode>
     <ErrorBoundary>
-      <App />
+      {/*
+        ThemeProvider must be outside AuthProvider so the dark-mode class
+        is applied to <html> before any authenticated UI renders.
+        AuthProvider must wrap App so every useAuth() call has a context.
+      */}
+      <ThemeProvider>
+        <AuthProvider>
+          <App />
+        </AuthProvider>
+      </ThemeProvider>
     </ErrorBoundary>
   </StrictMode>,
 );
